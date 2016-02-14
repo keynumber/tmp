@@ -1,0 +1,79 @@
+logger 多线程
+poller test
+mem_pool完善
+fixqueue拷贝构造函数
+timerfd测试
+2. printf core问题怎么避免?貌似只能注意了,或者使用stringstream,将格式干掉,stringstream待添加
+c_map通过=分割,key和value不能包含空格/tab/换行等,后边需要改造,应该支持"
+SocketBuffer通过内存池获取内存块,可以优化,因为内存块大小相同,也不需要跨线程,可以在线程内部做为固定块,sendtosocket没有测试
+errno, shiftwriter and safe_io, return number, 见controller
+
+number to string
+
+# done
+1. event_notifier 是否线程安全? Yes
+
+
+
+
+
+静态成员变量没有在CPP文件中生命.......导致编译好长还时间不过,连接时会显示未定义变量.........例如:
+
+class Test
+{
+public:
+    Test ();
+    virtual ~Test ();
+    static void test();
+
+private:
+    static vector<int> vec;
+};
+
+Test::Test()
+{
+}
+
+Test::~Test()
+{
+}
+
+void Test::test()
+{
+    vec.size();
+}
+
+
+1. client fd存储设计
+    a. client fd特点:
+        1. fd一般连续
+        2. fd会被随机删除(连接长时间没有被使用)
+
+    b. 存储方案
+        1. 用C数组进行存储,对fd进行取余获取存储下标,poller中存储下表
+            缺点: 1. 部分内存可能不会被使用到
+                  2. 内存没有用完的时候,就可能冲突
+
+        2. 固定C数组存储,申请额外的部分空间记录array空闲链,poller存储并返回下标
+            缺点: 1. 使用额外空间
+            优点: 1. 冲突则肯定是空间用完了
+                  2. 空间利用率高
+
+
+
+
+bind参数中，第一个端口需要转成网络字节序，．．．．否则ｓｓ／ｔｅｌｎｅｔ看不到监听的端口，因为没有在你想监听的端口监听
+
+
+２．计算机上有多个ＩＰ，ｂｉｎｄ使用ＩＮＡＤＤＲ＿ＡＮＹ时，绑定在哪个ＩＰ／网络接口上呢？？？？？ＭＣＰ怎么做的？
+３．ｂｉｎｄ到１２７．０．０．１，和ｂｉｎｄ到其他的网络接口，有什么不同？？？
+
+
+4. 经常出现listensocket处于timewait状态...????什么原因?
+
+
+
+排查问题:
+1. 日志
+2. dmesg
+3. core
