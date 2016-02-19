@@ -46,28 +46,26 @@ void MessageCenter::Register(Worker *worker)
     _workers.push_back(worker);
 }
 
-void MessageCenter::PostAcceptClient(int fd, const sockaddr_in &addr)
+void MessageCenter::PostAcceptClient(const AcceptInfo & accept_info)
 {
     int size = _iohandlers.size();
     assert(size > 0);
-
-    AcceptInfo accept_info;
-    accept_info.fd = fd;
-    accept_info.addr = addr;
 
     uint32_t idx = __sync_fetch_and_add(&_last_iohandler_idx, 1);
     idx = idx % size;
     _iohandlers[idx]->_accept_queue.Put(accept_info);
 }
 
-void MessageCenter::PostClientReqToWorker(const TransferObj &obj)
+void MessageCenter::PostClientReqToWorker(const IoHandlerReqToWorkerPack &req)
 {
     int size = _workers.size();
     assert(size > 0);
 
     uint32_t idx = __sync_fetch_and_add(&_last_worker_idx, 1);
     idx = idx % size;
-    _workers[idx]->_client_req_queue.Put(obj);
+
+    // TODO handle exception
+    _workers[idx]->_client_req_queue.Put(req);
 }
 
 } /* namespace ef */

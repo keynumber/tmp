@@ -36,6 +36,12 @@ private:
     bool CreateListenSocket();
 
 private:
+    struct ListenerInfo {
+        int fd = -1;
+        unsigned short port = 0;
+    };
+
+private:
     int _acceptor_id;
     bool _run_flag;
 

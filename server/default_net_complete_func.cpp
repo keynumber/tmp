@@ -5,24 +5,22 @@
 
 #include "default_net_complete_func.h"
 
-#include "global_configure.h"
 #include "common/macro.h"
-
-extern ef::GlobalConfigure gGlobalConfigure;
 
 namespace ef
 {
 
-#define DEFAULT_MINMIMUM_PACKET_LENGTH sizeof(uint32_t)
+const int max_packet_size = 20 * 1024;
+const int min_packet_size = sizeof(uint32_t);
 
 int default_net_complete_func(char *buf, uint32_t len, uint32_t * theoy_len)
 {
     // TODO ntoh
-    if (unlikely(len < DEFAULT_MINMIMUM_PACKET_LENGTH))
+    if (unlikely(len < min_packet_size))
         return 0;
 
     uint32_t packet_len = *(uint32_t*)buf;
-    if (unlikely(len > gGlobalConfigure.max_packet_size)) {
+    if (unlikely(len > max_packet_size)) {
         return -1;
     }
 
@@ -34,7 +32,7 @@ int default_net_complete_func(char *buf, uint32_t len, uint32_t * theoy_len)
 
 int default_minimum_packet_len_func()
 {
-    return DEFAULT_MINMIMUM_PACKET_LENGTH;
+    return min_packet_size;
 }
 
 } /* namespace ef */

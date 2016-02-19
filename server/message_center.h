@@ -23,9 +23,9 @@ public:
     static void Register(IoHandler *iohandler);
     static void Register(Worker *worker);
 
-    static void PostAcceptClient(int fd, const sockaddr_in &addr);
-    static void PostClientReqToWorker(const TransferObj &obj);
-    static void PostSvrRspToClient();
+    static void PostAcceptClient(const AcceptInfo & accept_info);
+    static void PostClientReqToWorker(const IoHandlerReqToWorkerPack &req);
+    static void PostSvrRspToClient(const WorkerRspToIoHandlerPack & orsp);
 
 private:
     MessageCenter();

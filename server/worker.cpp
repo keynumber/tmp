@@ -58,20 +58,19 @@ void Worker::Run()
             _poller.GetEvent(&key, &events);
             assert(key >= 0);
 
-            TransferObj obj;
-            if (unlikely(!_client_req_queue.Take(&obj))) {
+            IoHandlerReqToWorkerPack req;
+            if (unlikely(!_client_req_queue.Take(&req))) {
                 LogWarn("no message");
                 continue;
             }
-            HandleClientRequest(obj);
+            HandleClientRequest(req);
         }
     }
 }
 
-int Worker::HandleClientRequest(const TransferObj & obj)
+int Worker::HandleClientRequest(const IoHandlerReqToWorkerPack &req)
 {
-    RcBuf rcbuf;
-    rcbuf.FromTransferObj(obj);
+    const RcBuf & rcbuf = req.request_buf;
 
     char buf[1024] = {0};
     memcpy(buf, rcbuf.buf + rcbuf.offset, rcbuf.len);

@@ -8,6 +8,7 @@
 
 #include <string>
 
+#include "comm_struct.h"
 #include "common/task_queue.h"
 #include "common/poller.h"
 
@@ -28,7 +29,8 @@ public:
     const std::string & GetErrMsg() const;
 
 private:
-    int HandleClientRequest(const TransferObj & obj);
+    int HandleClientRequest(const IoHandlerReqToWorkerPack & obj);
+
 private:
     int _worker_id;
     bool _run_flag;
@@ -36,7 +38,7 @@ private:
     Poller _poller;
 
     // acceptor接收到的连接传递到iohandler
-    TaskQueue<TransferObj> _client_req_queue;
+    TaskQueue<IoHandlerReqToWorkerPack> _client_req_queue;
 
     std::string _errmsg;
 };

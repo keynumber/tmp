@@ -10,7 +10,6 @@
 
 #include "global_configure.h"
 #include "message_center.h"
-#include "default_net_complete_func.h"
 #include "common/macro.h"
 #include "common/debug.h"
 #include "common/util.h"
@@ -50,15 +49,26 @@ bool IoHandler::Initialize(int handler_id)
     _run_flag = true;
 
     if (!_accept_queue.Initialize(gGlobalConfigure.iohandler_accept_queue_size, false)) {
-        _errmsg = _accept_queue.GetErrMsg();
+        _errmsg = std::string("iohandler queue acceptor to iohandler initialize failed, ")
+                + _accept_queue.GetErrMsg();
         return false;
     }
     int accept_queue_fd = _accept_queue.GetNotifier();
-
     int accept_queue_idx = _fd_array.Push(FdInfo());
     _fd_array[accept_queue_idx].fd = accept_queue_fd;
-    _fd_array[accept_queue_idx].type = kAcceptQueue;
+    _fd_array[accept_queue_idx].type = kAcceptorToIohandlerQueue;
     _poller.Add(accept_queue_fd, accept_queue_idx, EPOLLIN);
+
+    if (!_worker_queue.Initialize(gGlobalConfigure.iohandler_worker_rsp_queue_size, false)) {
+        _errmsg = std::string("iohandler queue worker response to iohandler initialize failed, ")
+                + _worker_queue.GetErrMsg();
+        return false;
+    }
+    int worker_queue_fd = _worker_queue.GetNotifier();
+    int worker_queue_idx = _fd_array.Push(FdInfo());
+    _fd_array[worker_queue_idx].fd = worker_queue_fd;
+    _fd_array[worker_queue_idx].type = kWorkerRspToIohandlerQueue;
+    _poller.Add(worker_queue_fd, worker_queue_idx, EPOLLIN);
     return true;
 }
 
@@ -90,7 +100,7 @@ void IoHandler::Run()
 
             const FdInfo & fdinfo = _fd_array[key];
             switch (fdinfo.type) {
-            case kAcceptQueue:
+            case kAcceptorToIohandlerQueue:
             {
                 AcceptInfo accinfo;
                 if (unlikely(!_accept_queue.Take(&accinfo))) {
@@ -98,6 +108,16 @@ void IoHandler::Run()
                     continue;
                 }
                 HandleAcceptClient(accinfo);
+                break;
+            }
+            case kWorkerRspToIohandlerQueue:
+            {
+                WorkerRspToIoHandlerPack rsp;
+                if (unlikely(!_worker_queue.Take(&rsp))) {
+                    LogWarn("iohandle %d: worker has notified but no response message\n", _handler_id);
+                    continue;
+                }
+                HandleWorkerRsp(rsp);
                 break;
             }
             case kClientFd:
@@ -124,6 +144,13 @@ bool IoHandler::HandleAcceptClient(const AcceptInfo & accinfo)
 {
     LogFrame("iohandler %d: accept client from %s:%d, fd: %d\n", _handler_id,
             IpToString(accinfo.addr.sin_addr.s_addr).c_str(), ntohs(accinfo.addr.sin_port), accinfo.fd);
+    if (unlikely(set_nonblock(accinfo.fd) < 0)) {
+        LogFrame("iohandler %d: accept client from %s:%d, fd: %d set_nonblock failed\n",
+                 _handler_id, IpToString(accinfo.addr.sin_addr.s_addr).c_str(),
+                 ntohs(accinfo.addr.sin_port), accinfo.fd);
+        safe_close(accinfo.fd);
+        return false;
+    }
 
     int client_idx= _fd_array.Push(FdInfo());
     _fd_array[client_idx].fd = accinfo.fd;
@@ -166,16 +193,22 @@ bool IoHandler::HandleClientRequest(int idx)
     RcBuf * & buf2 = _client_read_buf2;
 
     // copy 上次未构成完整包的数据
-    char * unfulfiled_buf = _fd_array[idx].rc_buf.buf + _fd_array[idx].rc_buf.offset;
-    uint32_t unfulfiled_len = _fd_array[idx].rc_buf.len;
-    if (unfulfiled_len > buf1->len) {
-        DELETE_POINTER(buf1);
-        buf1 = buf2;
-        buf2 = new RcBuf(gGlobalConfigure.iohandler_read_buf_len);
+    char * unfulfiled_buf =_fd_array[idx]._to_request.buf + _fd_array[idx]._to_request.offset;
+    uint32_t unfulfiled_len = _fd_array[idx]._to_request.len;
+    if (_fd_array[idx]._to_request.buf) {
+        char * unfulfiled_buf = _fd_array[idx]._to_request.buf + _fd_array[idx]._to_request.offset;
+        uint32_t unfulfiled_len = _fd_array[idx]._to_request.len;
+        if (unfulfiled_len > buf1->len) {
+            DELETE_POINTER(buf1);
+            buf1 = buf2;
+            buf2 = new RcBuf(gGlobalConfigure.iohandler_read_buf_len);
+        }
+        memcpy(buf1->buf + buf1->offset, unfulfiled_buf, unfulfiled_len);
+        _fd_array[idx]._to_request.Release();
     }
-    memcpy(buf1->buf + buf1->len, unfulfiled_buf, unfulfiled_len);
-    // buf1->offset += unfulfiled_len;
-    // buf1->len -= unfulfiled_len;
+
+    DEBUG("iohandler %d: last from client %s:%d fd %d unfulfiled data len %d byts\n",
+            _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd, unfulfiled_len);
 
     struct iovec vec[2];
     vec[0].iov_base = buf1->buf + buf1->offset + unfulfiled_len;
@@ -202,135 +235,135 @@ bool IoHandler::HandleClientRequest(int idx)
             _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd, len);
 
     int remain_data_len = len + unfulfiled_len;
-    uint32_t handle_len = HandleClientBuf(buf1, remain_data_len);
+    int handle_len = HandleClientBuf(idx, buf1, remain_data_len);
     if (unlikely(handle_len < 0)) {
         LogInfo("iohandler %d: client %s:%d fd %d request data check failed with net_complete_func, close connection",
                 _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
         CloseClientConn(idx);
         return false;
     }
-    // TODO buf1 use all used , need to alloc new rcbuf
 
-    // 数据跨越两个buffer, 并且够计算包大小
     remain_data_len -= handle_len;
-    if (remain_data_len > buf1->len) {
-        // 将数据拷贝到tmpbuf中计算下一个包多大
-        bool has_theory_len = true;
-        uint32_t theory_len;
 
-        if (remain_data_len > _minimum_packet_len) {
-            char tmpbuf[_minimum_packet_len];
-            if (buf1->len > _minimum_packet_len) {
-                memcpy(tmpbuf, buf1->buf + buf1->offset, _minimum_packet_len);
-            } else {
-                memcpy(tmpbuf, buf1->buf + buf1->offset, buf1->len);
-                memcpy(tmpbuf+buf1->len, buf2->buf+buf2->offset, _minimum_packet_len-buf1->len);
-            }
-
-            int ret = _net_complete_func(tmpbuf, _minimum_packet_len, &theory_len);
-            if (unlikely(ret < 0)) {
-                LogInfo("iohandler %d: client %s:%d fd %d request data check failed with net_complete_func, close connection",
-                        _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
-                CloseClientConn(idx);
-                return false;
-            }
+    // 剩余读到的buf长度大于最小包长
+    uint32_t next_packet_remain_data = 0;
+    uint32_t next_packet_theory_len = 0;
+    if (remain_data_len >= _minimum_packet_len) {
+        char * p = nullptr;
+        char tmpbuf[_minimum_packet_len];
+        if (buf1->len >= _minimum_packet_len) {
+            p = buf1->buf + buf1->offset;
         } else {
-            has_theory_len = false;
+            p = tmpbuf;
+            memcpy(tmpbuf, buf1->buf + buf1->offset, buf1->len);
+            memcpy(tmpbuf+buf1->len, buf2->buf+buf2->offset, _minimum_packet_len-buf1->len);
         }
 
-        // buf1和buf2中的数据能够构成一个完整的包,申请额外的空间构成一个连续的buf存放跨buf1和buf2的那个请求
-        if (remain_data_len >= theory_len + _minimum_packet_len) {
-            RcBuf rcbuf(theory_len);
-            // 将完整的数据包拷贝到rcbuf中
-            {
-                uint32_t copy_len = 0;
-                uint32_t skip_len = _minimum_packet_len;
+        int ret = _net_complete_func(p, _minimum_packet_len, &next_packet_theory_len);
+        if (unlikely(ret < 0)) {
+            LogInfo("iohandler %d: client %s:%d fd %d request data check failed with net_complete_func, close connection",
+                    _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
+            CloseClientConn(idx);
+            return false;
+        }
+        if (remain_data_len >= next_packet_theory_len + _minimum_packet_len) {
+            next_packet_remain_data = next_packet_theory_len + _minimum_packet_len;
+        } else {
+            next_packet_remain_data = remain_data_len;
+        }
+    } else {
+        next_packet_remain_data = remain_data_len;
+    }
 
-                uint32_t skip_buf1_len = buf1->len > skip_len ? skip_len : buf1->len ;
-                buf1->len -= skip_buf1_len;
-                buf1->offset += skip_buf1_len;
-                copy_len = buf1->len;
-                memcpy(rcbuf.buf, buf1->buf+buf1->offset, copy_len);
-                buf1->len -= copy_len;
-                buf1->offset += copy_len;
-                rcbuf.offset += copy_len;
+    // 如果存在数句跨buf,则进行数据拷贝
+    if (next_packet_remain_data > buf1->len) {
+        // 当数据全在buf2中时,也会进行数据拷贝,怎么处理?????????????
+        RcBuf tmpbuf(next_packet_remain_data);
+        // buf1中包含部分数据
+        memcpy(tmpbuf.buf, buf1->buf + buf1->offset, buf1->len);
+        // 后边拷贝还需要用到buf1->len
+        // buf1->offset += buf1->len;
+        // buf1->len = 0;
+        int tmp2_copy_len = next_packet_remain_data - buf1->len;
+        memcpy(tmpbuf.buf + buf1->len, buf2->buf + buf2->offset, next_packet_remain_data - buf1->len);
+        buf1->offset += buf1->len;
+        buf1->len = 0;
+        buf2->offset += tmp2_copy_len;
+        buf2->len -= tmp2_copy_len;
 
-                skip_len -= skip_buf1_len;
-                copy_len = theory_len - copy_len;
+        remain_data_len -= next_packet_remain_data;
 
-                int skip_buf2_len = buf2->len > skip_len ? skip_len : buf2->len ;
-                buf2->len -= skip_buf2_len;
-                buf2->offset += skip_buf2_len;
-                memcpy(rcbuf.buf + rcbuf.offset, buf2->buf+buf2->offset, copy_len);
-                buf2->offset += copy_len;
-                buf2->len -= copy_len;
-                rcbuf.offset += copy_len;
+        // 如果临时buf中的数据够一个完整的包,即能够计算出包长,并且包长大于等于
+        // 这时候buf1中的数据肯定用完,并且buf2中肯定包含数据
+        // (因为HandleClientBuf会处理,直到不能构成一个完整的包)
+        if (next_packet_remain_data >= _minimum_packet_len &&
+            next_packet_remain_data >= _minimum_packet_len + next_packet_theory_len) {
+            IoHandlerReqToWorkerPack req;
+            tmpbuf.offset += _minimum_packet_len;    // 跳过包头
+            tmpbuf.len -= _minimum_packet_len;    // 跳过包头
+            req.fdinfo = &_fd_array[idx];
+            req.request_buf = tmpbuf;
+            MessageCenter::PostClientReqToWorker(req);
 
-                remain_data_len -= (theory_len + _minimum_packet_len);
-            }
-
-            TransferObj obj;
-            rcbuf.ToTransferObj(&obj, 0, theory_len);
-            MessageCenter::PostClientReqToWorker(obj);
-
-            // 释放已经使用完的buf1
-            DELETE_POINTER(buf1);
-            buf1 = buf2;
-            buf2 = new RcBuf(gGlobalConfigure.iohandler_read_buf_len);
-
-            handle_len = HandleClientBuf(buf1, remain_data_len);
+            handle_len = HandleClientBuf(idx, buf2, remain_data_len);
             if (unlikely(handle_len < 0)) {
                 LogInfo("iohandler %d: client %s:%d fd %d request data check failed with net_complete_func, close connection",
                         _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
                 CloseClientConn(idx);
                 return false;
             }
+
+            // buf2中有为处理完的数据
             remain_data_len -= handle_len;
+            if (remain_data_len > 0) {
+                fdinfo._to_request.Copy(*buf2, buf2->offset, remain_data_len);
+                buf2->offset += remain_data_len;
+                buf2->len -= remain_data_len;
+            }
+        } else {
+            // 如果临时数据中的不能构成一个包,则直接放在fd的缓存buf中就行了
+            fdinfo._to_request = tmpbuf;
         }
+    } else if (next_packet_remain_data > 0) {
+        fdinfo._to_request.Copy(*buf1, buf1->offset, next_packet_remain_data);
+        buf1->offset += next_packet_remain_data;
+        buf1->len -= next_packet_remain_data;
+    }
 
-        // buf1和buf2中的数据不能够构成一个完整的包,则将buf1中的数据拷贝到buf2中
-        if (!has_theory_len) {
-            uint32_t data_len_in_buf2 = remain_data_len - buf1->len;
-            char buf[gGlobalConfigure.max_packet_size];
-            memcpy(buf, buf1->buf+buf1->offset, buf1->len);
-            memcpy(buf+buf1->len, buf2->buf+buf2->offset, remain_data_len-buf1->len);
-            memcpy(buf2->buf, buf, remain_data_len);
-            buf2->offset = remain_data_len;
-            buf2->len = remain_data_len;
-
-            // 释放已经使用完的buf1
+    // 如果buf1/buf2用完了,重新申请
+    if (buf1->len == 0) {
+        DELETE_POINTER(buf1);
+        buf1 = buf2;
+        buf2 = new RcBuf(gGlobalConfigure.iohandler_read_buf_len);
+        assert(buf2);
+        if (buf1->len == 0) {
             DELETE_POINTER(buf1);
             buf1 = buf2;
             buf2 = new RcBuf(gGlobalConfigure.iohandler_read_buf_len);
-            return true;
+            assert(buf2);
         }
-    }
-
-    if (remain_data_len > 0) {
-        _fd_array[idx].rc_buf.Copy(*buf1, buf1->offset, remain_data_len);
-        buf1->offset += remain_data_len;
-        buf1->len -= remain_data_len;
     }
 
     return true;
 }
 
-int IoHandler::HandleClientBuf(RcBuf *rcbuf, uint32_t len)
+int IoHandler::HandleClientBuf(int idx, RcBuf *rcbuf, uint32_t len)
 {
     uint32_t remain_data_len = len > rcbuf->len ? rcbuf->len : len;
     uint32_t handle_len = 0;
     uint32_t theory_packet_len = 0;
 
-    TransferObj obj;
+    IoHandlerReqToWorkerPack req;
+    req.fdinfo = &_fd_array[idx];
     while (remain_data_len >= _minimum_packet_len) {
         int ret = _net_complete_func(rcbuf->buf + rcbuf->offset, remain_data_len, &theory_packet_len);
         if (likely(ret > 0)) {
-            if (ret + _minimum_packet_len > rcbuf->len) {   // 不够一个数据包
+            if (ret + _minimum_packet_len > remain_data_len) {   // 不够一个数据包
                 break;
             }
 
-            rcbuf->ToTransferObj(&obj, rcbuf->offset + _minimum_packet_len, ret);
-            MessageCenter::PostClientReqToWorker(obj);
+            req.request_buf.Copy(*rcbuf, rcbuf->offset + _minimum_packet_len, theory_packet_len);
+            MessageCenter::PostClientReqToWorker(req);
 
             ret += _minimum_packet_len;
             rcbuf->offset += ret;
@@ -354,15 +387,64 @@ void IoHandler::CloseClientConn(int idx)
     // 则poller删除fd时,会报错bad file descriptor,并且该fd会被poller持续触发,
     // 导致iohandler cpu占用持续100%
     // safe_close(fd);
-    if (_poller.Del(fd) < 0) {
-        const FdInfo & fdinfo = _fd_array[idx];
-        LogErr("iohandler %d: delete fd %d failed, cient %s:%d, errmsg: %s\n",
-               _handler_id, fdinfo.fd, IpToString(fdinfo.client_ip).c_str(),
-               ntohs(fdinfo.client_port), _poller.GetErrMsg().c_str());
-    }
+    _poller.Del(fd);
+    // _fd_array.Pop支持析构函数
+    // 会自动释放掉fd关联的用户请求数据和待发送数据,而不需要显示调用进行析构
     _fd_array.Pop(idx);
     _fd_expire_queue.Erase(idx);
     safe_close(fd);
+}
+
+bool IoHandler::HandleWorkerRsp(const WorkerRspToIoHandlerPack & rsp)
+{
+    FdInfo & fdinfo = *rsp.fdinfo;
+    fdinfo._to_send.push_back(rsp.response_buf);
+    return SendDataToClient(fdinfo);
+    // TODO epollout when data is not all sent
+}
+
+bool IoHandler::SendDataToClient(FdInfo & fdinfo)
+{
+    const int max_iovec_count = 10 * 1024;
+    int size = fdinfo._to_send.size();
+    if (unlikely(size > max_iovec_count)) {
+        LogErr("iohandler %d: _to_send buf is too large close client fd %d, cient %s:%d\n",
+               _handler_id, fdinfo.fd, IpToString(fdinfo.client_ip).c_str());
+        return false;
+    }
+
+    int cnt = 0;
+    struct iovec towrite[max_iovec_count];
+    for (const auto & it : fdinfo._to_send) {
+        towrite[cnt].iov_base = it.buf + it.offset;
+        towrite[cnt].iov_len = it.len;
+        ++cnt;
+    }
+
+    int fd = fdinfo.fd;
+    int ret = safe_writev(fd, towrite, cnt);
+    if (unlikely( ret < 0)) {
+        LogErr("iohandler %d: write fd %d failed, cient %s:%d, errmsg: %s\n",
+               _handler_id, fdinfo.fd, IpToString(fdinfo.client_ip).c_str(),
+               ntohs(fdinfo.client_port), safe_strerror(errno).c_str());
+        return false;
+    }
+
+    auto it = fdinfo._to_send.begin();
+    auto next = it;
+    while (ret > 0) {
+        it = next;
+        next = ++it;
+        if (ret >= it->len) {
+            ret -= it->len;
+            fdinfo._to_send.erase(it);
+        } else {
+            it->len -= ret;
+            it->offset += ret;
+            break;
+        }
+    }
+    return true;
 }
 
 void IoHandler::Stop()

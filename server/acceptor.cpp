@@ -145,7 +145,11 @@ void Acceptor::Run()
 
                 LogFrame("accept client from %s:%d, fd: %d\n",
                         IpToString(addr.sin_addr.s_addr).c_str(), ntohs(addr.sin_port), fd);
-                MessageCenter::PostAcceptClient(fd, addr);
+
+                AcceptInfo accept_info;
+                accept_info.fd = fd;
+                accept_info.addr = addr;
+                MessageCenter::PostAcceptClient(accept_info);
             } else {
                 LogErr("listen socket on port %d get event not EPOLLIN, but %d\n",
                         _listener[key].port, events);
