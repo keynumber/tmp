@@ -4,6 +4,14 @@
 
 using namespace std;
 
+class A
+{
+public:
+    A () {cout << "contruct" << endl;}
+    virtual ~A () {cout << "destroy" << endl;}
+};
+
+
 void TestPush()
 {
     ef::FixQueue<int> q(5);
@@ -42,8 +50,19 @@ void TestPush()
     }
 }
 
+void TestObj()
+{
+    ef::FixQueue<A> q(5);
+    cout << " ----- push" << endl;
+    q.push(A());
+    cout << " ----- pop" << endl;
+    q.pop();
+    cout << " ----- pop done" << endl;
+}
+
 int main(int argc, char *argv[])
 {
     TestPush();
+    TestObj();
     return 0;
 }

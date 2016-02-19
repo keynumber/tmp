@@ -17,7 +17,7 @@ using namespace std;
 
 const int buflen = 1024;
 
-ef::TransferObj thread_queue[buflen];
+ef::RcBuf thread_queue[buflen];
 int size = 0;
 
 void reciever() {
@@ -26,8 +26,7 @@ void reciever() {
         sleep(1);
     }
 
-    ef::RcBuf rc;
-    rc.FromTransferObj(thread_queue[0]);
+    ef::RcBuf rc = thread_queue[0];
 
     cout << "receiver: thread get message offset: " << rc.offset << endl;
     cout << "receiver: thread get message length: " << rc.len << endl;
@@ -47,7 +46,9 @@ void sender() {
     cout << "sender: send message offset: " << strlen(role) << endl;
     cout << "sender: send message length: " << strlen(message) << endl;
     cout << "sender: send message: " << message << endl;
-    rc.ToTransferObj(&thread_queue[0], strlen(role), strlen(message));
+    rc.offset = strlen(role);
+    rc.len = strlen(message);
+    thread_queue[0] = rc;
     size = 1;
 
     sleep(2);
@@ -63,5 +64,17 @@ int main(int argc, char *argv[])
 
     t1.join();
     t2.join();
+    // std::list<ef::RcBuf> buf_list;
+    // cout << "create" << endl;
+    // ef::RcBuf rcbuf(10);
+    // cout << "push_back" << endl;
+    // buf_list.push_back(rcbuf);
+    // cout << "release" << endl;
+    // rcbuf.Release();
+    // cout << "get out" << endl;
+    // ef::RcBuf tmp = *buf_list.begin();
+    // cout << "clear" << endl;
+    // buf_list.clear();
+    // cout << "done" << endl;
     return 0;
 }

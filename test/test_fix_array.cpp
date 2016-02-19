@@ -4,6 +4,14 @@
 
 using namespace std;
 
+class A
+{
+public:
+    A () {cout << "construct" << endl;}
+    virtual ~A () {cout << "destroy" << endl;}
+};
+
+
 void test_fix_array() {
     int idx = 1;
     ef::FixArray<int> arr(5);
@@ -33,8 +41,19 @@ void test_fix_array() {
     cout << "push # " << idx++  << " ret: " << arr.Push(6) << " size: " << arr.Size() << endl;
 }
 
+void test_obj()
+{
+    ef::FixArray<A> arr(10);
+    cout << "push" << endl;
+    arr.Push(A());
+    cout << "pop" << endl;
+    arr.Pop(0);
+    cout << "done" << endl;
+}
+
 int main(int argc, char *argv[])
 {
     test_fix_array();
+    test_obj();
     return 0;
 }
