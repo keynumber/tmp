@@ -12,6 +12,11 @@
 #include <stdlib.h>
 #include <time.h>
 
+#include <iostream>
+
+using namespace std;
+
+
 #define MAX_EVENTS 1000
 #define BUFFER_SIZE 1000
 #define EPOLLEN 1018
@@ -19,17 +24,39 @@
 uint32_t suc = 0;
 uint32_t fail = 0;
 
-int write_to_server(int fd) {
-    const char * str = "hello world";
-    char buf[BUFFER_SIZE];
-    *(uint32_t*)buf = strlen(str);
-    memcpy(buf + sizeof(uint32_t), str, strlen(str));
+const int buflen = 10240;
+char send_buf[buflen];
+int buf_content_len = 0;
 
-    int ret = write(fd, buf, strlen(str) + sizeof(uint32_t));
-    if (ret < 0) {
-        puts("write failed");
+void generator_sendbuf(int n)
+{
+    const char * str = "hello world";
+    int len = strlen(str);
+    for (int i=0; i< n; i++) {
+        *(uint32_t*)(send_buf+buf_content_len) = len;
+        buf_content_len += sizeof(uint32_t);
+        memcpy(send_buf+buf_content_len, str, len);
+        buf_content_len += len;
     }
-    return ret;
+}
+
+int write_to_server(int fd) {
+
+    generator_sendbuf(100);
+    int send_len = 0;
+    int totoal_send = send_len;
+    while (true) {
+        cin >> send_len;
+        if (send_len < 0)
+            break;
+        int ret = write(fd, send_buf + totoal_send, send_len);
+        if (ret != send_len) {
+            perror("write failed");
+            return -1;
+        }
+        totoal_send += send_len;
+    }
+    return 0;
 }
 
 int visit_client()
