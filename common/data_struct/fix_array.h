@@ -50,6 +50,7 @@ public:
 
     inline int Pop(int idx) {
         --_size;
+        _array[idx].~T();       // 执行析构函数释放对象所占用资源
         _free_list[idx] = _free_head;
         _free_head = idx;
         return 0;

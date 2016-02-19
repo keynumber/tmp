@@ -44,6 +44,14 @@ inline ssize_t safe_write(int fd, const void *buf, size_t count)
     return ret;
 }
 
+inline ssize_t safe_writev(int fd, struct iovec *iov, size_t iovcnt) {
+    ssize_t ret;
+    do {
+        ret = writev(fd, iov, iovcnt);
+    } while (unlikely(ret < 0 && errno == EINTR));
+    return ret;
+}
+
 inline int set_nonblock(int fd)
 {
     int ret = 0;

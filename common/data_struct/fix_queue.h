@@ -43,7 +43,7 @@ public:
     FixQueue(const FixQueue && q) = delete;
     FixQueue & operator = (const FixQueue && q) = delete;
 
-    bool push(T v)
+    inline bool push(const T & v)
     {
         if (!full()) {
             _queue[_tail] = v;
@@ -53,19 +53,21 @@ public:
         return false;
     }
 
-    void pop()
+    inline void pop()
     {
         if (!empty()) {
-            _head = (_head + 1) % _max_size;
+            int idx = (_head + 1) % _max_size;
+            _queue[idx].~T();
+            _head = idx;
         }
     }
 
-    const T & front() const
+    inline const T & front() const
     {
         return _queue[(_head + 1) % _max_size];
     }
 
-    const T & back() const
+    inline const T & back() const
     {
         return _queue[(_tail - 1 + _max_size) % _max_size];
     }
