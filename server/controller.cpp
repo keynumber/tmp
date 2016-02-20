@@ -21,10 +21,11 @@ ef::GlobalConfigure gGlobalConfigure;
 
 namespace ef {
 
-#define DELETE_CONTAINER(container) do {    \
+#define DELETE_ELEMENT_AND_CLEAR_CONTAINER(container) do {    \
     for (auto & it : container) {           \
         DELETE_POINTER(it);                 \
     }                                       \
+    container.clear();                      \
 } while (0)
 
 #define CONTAINER_DO(container, todo) do {  \
@@ -44,12 +45,9 @@ Controller::~Controller()
 {
     StopServer();
 
-    DELETE_CONTAINER(_acceptors);
-    DELETE_CONTAINER(_iohandlers);
-    DELETE_CONTAINER(_workers);
-    DELETE_CONTAINER(_acceptor_threads);
-    DELETE_CONTAINER(_iohandler_threads);
-    DELETE_CONTAINER(_worker_threads);
+    DELETE_ELEMENT_AND_CLEAR_CONTAINER(_acceptors);
+    DELETE_ELEMENT_AND_CLEAR_CONTAINER(_iohandlers);
+    DELETE_ELEMENT_AND_CLEAR_CONTAINER(_workers);
 }
 
 bool Controller::InitServer()
@@ -61,7 +59,7 @@ bool Controller::InitServer()
     // }
 
     // ef::Logger::SetLogLevel(gGlobalConfigure.log_level);
-    ef::Logger::SetLogLevel(kLevelErr);
+    ef::Logger::SetLogLevel(kLevelFrame);
 
     // TODO
     if (!InitAcceptor() || !InitIoHandler() || !InitWorker()) {
@@ -72,6 +70,8 @@ bool Controller::InitServer()
 
 void Controller::StartServer()
 {
+    StopServer();
+
     // start acceptor
     for (auto &it : _acceptors) {
         std::thread * t = new std::thread(&Acceptor::Run, it);
@@ -108,6 +108,10 @@ void Controller::StopServer()
     CONTAINER_DO(_acceptor_threads, join);
     CONTAINER_DO(_iohandler_threads, join);
     CONTAINER_DO(_worker_threads, join);
+
+    DELETE_ELEMENT_AND_CLEAR_CONTAINER(_acceptor_threads);
+    DELETE_ELEMENT_AND_CLEAR_CONTAINER(_iohandler_threads);
+    DELETE_ELEMENT_AND_CLEAR_CONTAINER(_worker_threads);
 }
 
 bool Controller::InitAcceptor()

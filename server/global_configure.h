@@ -12,8 +12,6 @@ namespace ef
 {
 
 struct GlobalConfigure {
-    bool can_run = true;
-
     int client_max_inaction_time_ms = 50000;
 
     LogLevel log_level = kLevelFrame;

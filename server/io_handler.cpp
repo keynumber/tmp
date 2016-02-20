@@ -81,7 +81,8 @@ void IoHandler::Run()
     uint64_t key;
     uint32_t events;
 
-    while (gGlobalConfigure.can_run && _run_flag) {
+    _run_flag = true;
+    while (_run_flag) {
         event_num = _poller.Wait(100);
         if (unlikely(event_num < 0)) {
             LogErr("iohandler %d: wait error, errmsg: %s",
@@ -138,6 +139,8 @@ void IoHandler::Run()
         gettimeofday(&_now, nullptr);
         TimeTick();
     }
+
+    LogKey("iohandler %d stop running\n", _handler_id);
 }
 
 bool IoHandler::HandleAcceptClient(const AcceptInfo & accinfo)
@@ -276,7 +279,7 @@ bool IoHandler::HandleClientRequest(int idx)
 
     // 如果存在数句跨buf,则进行数据拷贝
     if (next_packet_remain_data > buf1->len) {
-        // 当数据全在buf2中时,也会进行数据拷贝,怎么处理?????????????
+        // TODO: 当数据全在buf2中时,也会进行数据拷贝,怎么处理?????????????
         RcBuf tmpbuf(next_packet_remain_data);
         // buf1中包含部分数据
         memcpy(tmpbuf.buf, buf1->buf + buf1->offset, buf1->len);
@@ -298,8 +301,6 @@ bool IoHandler::HandleClientRequest(int idx)
         if (next_packet_remain_data >= _header_len &&
             next_packet_remain_data >= _header_len + next_packet_theory_len) {
             IoHandlerReqToWorkerPack req;
-            tmpbuf.offset += _header_len;    // 跳过包头
-            tmpbuf.len -= _header_len;    // 跳过包头
             req.fdinfo = &_fd_array[idx];
             req.request_buf = tmpbuf;
             MessageCenter::PostClientReqToWorker(req);
@@ -361,7 +362,7 @@ int IoHandler::HandleClientBuf(int idx, RcBuf *rcbuf, int len)
                 break;
             }
 
-            req.request_buf.Copy(*rcbuf, rcbuf->offset + _header_len, theory_packet_len);
+            req.request_buf.Copy(*rcbuf, rcbuf->offset, theory_packet_len + _header_len);
             MessageCenter::PostClientReqToWorker(req);
 
             ret += _header_len;
@@ -448,7 +449,6 @@ bool IoHandler::SendDataToClient(FdInfo & fdinfo)
 
 void IoHandler::Stop()
 {
-    LogKey("iohandler %d stop running\n", _handler_id);
     _run_flag = false;
 }
 

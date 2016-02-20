@@ -9,6 +9,11 @@
 namespace ef
 {
 
+struct PacketHeader {
+    int length;         // length为包请求内容大小,不包括包头大小
+    unsigned int request_id;
+};
+
 // buf 为数据内容指针
 // len 为数据长度
 // theory_len 完整包应该的长度

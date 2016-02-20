@@ -48,7 +48,9 @@ void Worker::Run()
     int event_num = 0;
     uint64_t key;
     uint32_t events;
-    while (gGlobalConfigure.can_run && _run_flag) {
+
+    _run_flag = true;
+    while (_run_flag) {
         event_num = _poller.Wait(100);
         if (unlikely(event_num < 0)) {
             LogErr("worker wait error, handler id: %d, errmsg: %s",
@@ -68,20 +70,24 @@ void Worker::Run()
             HandleClientRequest(req);
         }
     }
+
+    LogKey("worker %d stop running\n", _worker_id);
 }
 
 int Worker::HandleClientRequest(const IoHandlerReqToWorkerPack &req)
 {
     const RcBuf & rcbuf = req.request_buf;
 
-    char buf[1024] = {0};
-    memcpy(buf, rcbuf.buf + rcbuf.offset, rcbuf.len);
-    for (int i = 0; i < rcbuf.len; ++i) {
+    PacketHeader * header = (PacketHeader*)(rcbuf.buf + rcbuf.offset);
+    char * buf = rcbuf.buf + rcbuf.offset + sizeof(PacketHeader);
+
+    for (int i = 0; i<header->length; ++i) {
         if(buf[i] == 0)
             buf[i] = '_';
     }
-    DEBUG("worker %d: get request from iohandler buf offset %d, buf len %d\n",
-          _worker_id, rcbuf.offset, rcbuf.len);
+
+    DEBUG("worker %d: get request from iohandler buf offset %d, buf len %d, content len: %d, request id: %d\n",
+          _worker_id, rcbuf.offset, rcbuf.len, header->length, header->request_id);
     DEBUG("request buf: |%s|\n", buf);
 
     return 0;
@@ -89,7 +95,6 @@ int Worker::HandleClientRequest(const IoHandlerReqToWorkerPack &req)
 
 void Worker::Stop()
 {
-    LogKey("worker %d stop running\n", _worker_id);
     _run_flag = false;
 }
 

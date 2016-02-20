@@ -28,6 +28,19 @@ struct AcceptInfo {
     sockaddr_in  addr;
 };
 
+// TODO: 可以用单独的通信queue来支持主流程外的其他通信
+enum class NotifyCmd : unsigned char {
+    // IoHandle and Worker
+    ClientConnet,
+    ClientDisconnet,
+    WorkerRequestDisconnect,    // worker请求iohandler断开某个client的连接
+
+    // Worker and Proxy
+    WorkerRequestExtSvr,        // worker请求外部server
+    ConnectExtSvrFailed,
+    DisconnectExtSvr
+};
+
 struct IoHandlerReqToWorkerPack {
     FdInfo *fdinfo;
     ef::RcBuf request_buf;

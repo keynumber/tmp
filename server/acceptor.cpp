@@ -121,7 +121,9 @@ void Acceptor::Run()
 {
     LogKey("acceptor %d start to run\n", _acceptor_id);
     int ret = 0;
-    while (gGlobalConfigure.can_run && _run_flag) {
+
+    _run_flag = true;
+    while (_run_flag) {
         ret = _poller->Wait(100);  // block TODO how many milsec to wait
         if (ret < 0) {
             LogErr("error happend when poller wait, errmsg: %s\n",
@@ -157,12 +159,11 @@ void Acceptor::Run()
         }
     }
 
-    LogKey("acceptor id %d exit\n", _acceptor_id);
+    LogKey("acceptor %d stop running\n", _acceptor_id);
 }
 
 void Acceptor::Stop()
 {
-    LogKey("acceptor %d stop running\n", _acceptor_id);
     _run_flag = false;
 }
 
