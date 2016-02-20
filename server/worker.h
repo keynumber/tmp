@@ -40,6 +40,7 @@ private:
     // acceptor接收到的连接传递到iohandler
     TaskQueue<IoHandlerReqToWorkerPack> _client_req_queue;
 
+    const int _packet_header_len;
     std::string _errmsg;
 };
 

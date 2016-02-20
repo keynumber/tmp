@@ -11,7 +11,7 @@ ADD_EXECUTABLE(server   ./main.cpp
                         ./worker.cpp
                         ./controller.cpp
                         ./message_center.cpp
-                        ./default_net_complete_func.cpp
+                        ./net_complete_func.cpp
 
                         ../common/logger.cpp
                         ../common/shift_writer.cpp

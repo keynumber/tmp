@@ -3,7 +3,7 @@
  * Date  : Feb 12, 2016
  */
 
-#include "default_net_complete_func.h"
+#include "net_complete_func.h"
 
 #include "common/macro.h"
 
@@ -13,7 +13,7 @@ namespace ef
 const int max_packet_size = 20 * 1024;
 const int min_packet_size = sizeof(int);
 
-int default_net_complete_func(char *buf, int len, int * theoy_len)
+int packet_len_func(char *buf, int len, int * theoy_len)
 {
     // TODO ntoh
     if (unlikely(len < min_packet_size))
@@ -30,7 +30,7 @@ int default_net_complete_func(char *buf, int len, int * theoy_len)
     return 0;
 }
 
-int default_minimum_packet_len_func()
+int header_len_func()
 {
     return min_packet_size;
 }

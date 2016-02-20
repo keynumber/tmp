@@ -7,6 +7,7 @@
 
 #include <string.h>
 
+#include "net_complete_func.h"
 #include "global_configure.h"
 #include "common/rc_buf.h"
 #include "common/debug.h"
@@ -19,6 +20,7 @@ Worker::Worker()
     : _worker_id(0)
     , _run_flag(true)
     , _poller(gGlobalConfigure.worker_max_event_num)
+    , _packet_header_len(header_len_func())
 {
 }
 

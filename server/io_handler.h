@@ -11,7 +11,7 @@
 #include <sys/time.h>
 
 #include "comm_struct.h"
-#include "default_net_complete_func.h"
+#include "net_complete_func.h"
 #include "common/rc_buf.h"
 #include "common/poller.h"
 #include "common/task_queue.h"
@@ -60,9 +60,9 @@ private:
     // worker发送响应数据到iohandler
     TaskQueue<WorkerRspToIoHandlerPack> _worker_queue;
 
-    net_complete_func _net_complete_func;
-    minimum_packet_len_func _minimum_packet_len_func ;
-    const int _minimum_packet_len;
+    ppacket_len_func _packet_len_func;
+    pheader_len_func _header_len_func ;
+    const int _header_len;
 
     std::string _errmsg;
 };

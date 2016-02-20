@@ -27,9 +27,9 @@ IoHandler::IoHandler()
     , _client_read_buf1(new RcBuf(gGlobalConfigure.iohandler_read_buf_len))
     , _client_read_buf2(new RcBuf(gGlobalConfigure.iohandler_read_buf_len))
     , _poller(gGlobalConfigure.iohandler_max_event_num)
-    , _net_complete_func(default_net_complete_func)
-    , _minimum_packet_len_func(default_minimum_packet_len_func)
-    , _minimum_packet_len(_minimum_packet_len_func())
+    , _packet_len_func(packet_len_func)
+    , _header_len_func(header_len_func)
+    , _header_len(_header_len_func())
 {
     assert(_client_read_buf1);
     assert(_client_read_buf2);
@@ -236,7 +236,7 @@ bool IoHandler::HandleClientRequest(int idx)
     int remain_data_len = len + unfulfiled_len;
     int handle_len = HandleClientBuf(idx, buf1, remain_data_len);
     if (unlikely(handle_len < 0)) {
-        LogInfo("iohandler %d: client %s:%d fd %d request data check failed with net_complete_func, close connection",
+        LogInfo("iohandler %d: client %s:%d fd %d request data check failed with packet_len_func, close connection",
                 _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
         CloseClientConn(idx);
         return false;
@@ -247,26 +247,26 @@ bool IoHandler::HandleClientRequest(int idx)
     // 剩余读到的buf长度大于最小包长
     int next_packet_remain_data = 0;
     int next_packet_theory_len = 0;
-    if (remain_data_len >= _minimum_packet_len) {
+    if (remain_data_len >= _header_len) {
         char * p = nullptr;
-        char tmpbuf[_minimum_packet_len];
-        if (buf1->len >= _minimum_packet_len) {
+        char tmpbuf[_header_len];
+        if (buf1->len >= _header_len) {
             p = buf1->buf + buf1->offset;
         } else {
             p = tmpbuf;
             memcpy(tmpbuf, buf1->buf + buf1->offset, buf1->len);
-            memcpy(tmpbuf+buf1->len, buf2->buf+buf2->offset, _minimum_packet_len-buf1->len);
+            memcpy(tmpbuf+buf1->len, buf2->buf+buf2->offset, _header_len-buf1->len);
         }
 
-        int ret = _net_complete_func(p, _minimum_packet_len, &next_packet_theory_len);
+        int ret = _packet_len_func(p, _header_len, &next_packet_theory_len);
         if (unlikely(ret < 0)) {
-            LogInfo("iohandler %d: client %s:%d fd %d request data check failed with net_complete_func, close connection",
+            LogInfo("iohandler %d: client %s:%d fd %d request data check failed with packet_len_func, close connection",
                     _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
             CloseClientConn(idx);
             return false;
         }
-        if (remain_data_len >= next_packet_theory_len + _minimum_packet_len) {
-            next_packet_remain_data = next_packet_theory_len + _minimum_packet_len;
+        if (remain_data_len >= next_packet_theory_len + _header_len) {
+            next_packet_remain_data = next_packet_theory_len + _header_len;
         } else {
             next_packet_remain_data = remain_data_len;
         }
@@ -295,18 +295,18 @@ bool IoHandler::HandleClientRequest(int idx)
         // 如果临时buf中的数据够一个完整的包,即能够计算出包长,并且包长大于等于
         // 这时候buf1中的数据肯定用完,并且buf2中肯定包含数据
         // (因为HandleClientBuf会处理,直到不能构成一个完整的包)
-        if (next_packet_remain_data >= _minimum_packet_len &&
-            next_packet_remain_data >= _minimum_packet_len + next_packet_theory_len) {
+        if (next_packet_remain_data >= _header_len &&
+            next_packet_remain_data >= _header_len + next_packet_theory_len) {
             IoHandlerReqToWorkerPack req;
-            tmpbuf.offset += _minimum_packet_len;    // 跳过包头
-            tmpbuf.len -= _minimum_packet_len;    // 跳过包头
+            tmpbuf.offset += _header_len;    // 跳过包头
+            tmpbuf.len -= _header_len;    // 跳过包头
             req.fdinfo = &_fd_array[idx];
             req.request_buf = tmpbuf;
             MessageCenter::PostClientReqToWorker(req);
 
             handle_len = HandleClientBuf(idx, buf2, remain_data_len);
             if (unlikely(handle_len < 0)) {
-                LogInfo("iohandler %d: client %s:%d fd %d request data check failed with net_complete_func, close connection",
+                LogInfo("iohandler %d: client %s:%d fd %d request data check failed with packet_len_func, close connection",
                         _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
                 CloseClientConn(idx);
                 return false;
@@ -354,17 +354,17 @@ int IoHandler::HandleClientBuf(int idx, RcBuf *rcbuf, int len)
 
     IoHandlerReqToWorkerPack req;
     req.fdinfo = &_fd_array[idx];
-    while (remain_data_len >= _minimum_packet_len) {
-        int ret = _net_complete_func(rcbuf->buf + rcbuf->offset, remain_data_len, &theory_packet_len);
+    while (remain_data_len >= _header_len) {
+        int ret = _packet_len_func(rcbuf->buf + rcbuf->offset, remain_data_len, &theory_packet_len);
         if (likely(ret > 0)) {
-            if (ret + _minimum_packet_len > remain_data_len) {   // 不够一个数据包
+            if (ret + _header_len > remain_data_len) {   // 不够一个数据包
                 break;
             }
 
-            req.request_buf.Copy(*rcbuf, rcbuf->offset + _minimum_packet_len, theory_packet_len);
+            req.request_buf.Copy(*rcbuf, rcbuf->offset + _header_len, theory_packet_len);
             MessageCenter::PostClientReqToWorker(req);
 
-            ret += _minimum_packet_len;
+            ret += _header_len;
             rcbuf->offset += ret;
             rcbuf->len -= ret;
             handle_len += ret;
