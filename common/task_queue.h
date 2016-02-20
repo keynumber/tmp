@@ -34,7 +34,7 @@ public:
      * @desc 设置task到来后的通知方式
      * @param blocked 是否已阻塞方式通知
      */
-    bool Initialize(uint32_t size, bool blocked);
+    bool Initialize(int size, bool blocked);
 
     /**
      * @desc 将任务放入队列,并通知

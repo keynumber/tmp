@@ -24,7 +24,7 @@ TaskQueue<T>::~TaskQueue()
 }
 
 template <class T>
-bool TaskQueue<T>::Initialize(uint32_t size, bool blocked)
+bool TaskQueue<T>::Initialize(int size, bool blocked)
 {
     _queue = new FixQueue<T>(size);
     assert(_queue != nullptr);

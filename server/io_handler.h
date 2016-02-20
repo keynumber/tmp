@@ -40,7 +40,7 @@ private:
     bool SendDataToClient(FdInfo & fdinfo);
     // < 0 出错
     // > 0 返回处理数据的长度
-    int HandleClientBuf(int idx, RcBuf *rcbuf, uint32_t len);
+    int HandleClientBuf(int idx, RcBuf *rcbuf, int len);
 
     void CloseClientConn(int idx);
 
@@ -62,7 +62,7 @@ private:
 
     net_complete_func _net_complete_func;
     minimum_packet_len_func _minimum_packet_len_func ;
-    const uint32_t _minimum_packet_len;
+    const int _minimum_packet_len;
 
     std::string _errmsg;
 };

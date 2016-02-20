@@ -6,8 +6,6 @@
 #ifndef __COMMON_SHIFT_WRITER_H_H___
 #define __COMMON_SHIFT_WRITER_H_H___
 
-#include <stdint.h>
-
 #include <string>
 
 namespace ef {
@@ -19,10 +17,10 @@ public:
     ShiftWriter();
     virtual ~ShiftWriter();
 
-    bool Initialize(const char * path, uint32_t max_file_size,
-                   uint32_t max_file_number, const char *suffix);
+    bool Initialize(const char * path, int max_file_size,
+                   int max_file_number, const char *suffix);
 
-    int Write(void * buf, uint32_t len);
+    int Write(void * buf, int len);
     const std::string & GetErrMsg() const;
 
 private:
@@ -32,9 +30,9 @@ private:
     int _fd;
     std::string _path;
     std::string _suffix;
-    uint32_t _max_file_size;
-    uint32_t _max_file_num;
-    uint32_t _cur_file_size;
+    int _max_file_size;
+    int _max_file_num;
+    int _cur_file_size;
 
     std::string _errmsg;
 };

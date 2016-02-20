@@ -11,15 +11,15 @@ namespace ef
 {
 
 const int max_packet_size = 20 * 1024;
-const int min_packet_size = sizeof(uint32_t);
+const int min_packet_size = sizeof(int);
 
-int default_net_complete_func(char *buf, uint32_t len, uint32_t * theoy_len)
+int default_net_complete_func(char *buf, int len, int * theoy_len)
 {
     // TODO ntoh
     if (unlikely(len < min_packet_size))
         return 0;
 
-    uint32_t packet_len = *(uint32_t*)buf;
+    int packet_len = *(int*)buf;
     if (unlikely(len > max_packet_size)) {
         return -1;
     }

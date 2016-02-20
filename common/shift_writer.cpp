@@ -33,8 +33,8 @@ ShiftWriter::~ShiftWriter()
 }
 
 bool ShiftWriter::Initialize(const char * path,
-                            uint32_t max_file_size,
-                            uint32_t max_file_number,
+                            int max_file_size,
+                            int max_file_number,
                             const char *suffix)
 {
     _path = path;
@@ -56,7 +56,7 @@ bool ShiftWriter::Initialize(const char * path,
     return true;
 }
 
-int ShiftWriter::Write(void* buf, uint32_t len)
+int ShiftWriter::Write(void* buf, int len)
 {
     int ret = safe_write(_fd, buf, len);
     if (ret < 0) {

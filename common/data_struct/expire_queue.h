@@ -6,21 +6,19 @@
 #ifndef __COMMON_DATA_STRUCT_EXPIRE_QUEUE_H_H___
 #define __COMMON_DATA_STRUCT_EXPIRE_QUEUE_H_H___
 
-#include <stdint.h>
-
 #include "common/macro.h"
 
 namespace ef {
 
 class ExpireQueue {
 public:
-    ExpireQueue(uint32_t capacity);
+    ExpireQueue(int capacity);
     virtual ~ExpireQueue();
 
     void Activate(int idx);
     void Erase(int idx);
 
-    inline uint32_t Capacity() const { return _capacity; }
+    inline int Capacity() const { return _capacity; }
     inline int GetHead() const { return _queue_next[_capacity]; }
     inline int GetTail() const { return _capacity == _tail ? -1 : _tail; }
     inline int GetNext(int idx) const { return _queue_next[idx]; }
@@ -35,7 +33,7 @@ public:
 private:
     int *_queue_pre;
     int *_queue_next;
-    uint32_t _capacity;
+    int _capacity;
 
     int _tail;
 };

@@ -22,11 +22,11 @@ namespace ef {
 IoHandler::IoHandler()
     : _handler_id(0)
     , _run_flag(true)
-    , _poller(gGlobalConfigure.iohandler_max_event_num)
     , _fd_array(gGlobalConfigure.iohandler_fd_array_size)
     , _fd_expire_queue(gGlobalConfigure.iohandler_fd_array_size)
     , _client_read_buf1(new RcBuf(gGlobalConfigure.iohandler_read_buf_len))
     , _client_read_buf2(new RcBuf(gGlobalConfigure.iohandler_read_buf_len))
+    , _poller(gGlobalConfigure.iohandler_max_event_num)
     , _net_complete_func(default_net_complete_func)
     , _minimum_packet_len_func(default_minimum_packet_len_func)
     , _minimum_packet_len(_minimum_packet_len_func())
@@ -193,11 +193,9 @@ bool IoHandler::HandleClientRequest(int idx)
     RcBuf * & buf2 = _client_read_buf2;
 
     // copy 上次未构成完整包的数据
-    char * unfulfiled_buf =_fd_array[idx]._to_request.buf + _fd_array[idx]._to_request.offset;
-    uint32_t unfulfiled_len = _fd_array[idx]._to_request.len;
+    int unfulfiled_len = _fd_array[idx]._to_request.len;
     if (_fd_array[idx]._to_request.buf) {
         char * unfulfiled_buf = _fd_array[idx]._to_request.buf + _fd_array[idx]._to_request.offset;
-        uint32_t unfulfiled_len = _fd_array[idx]._to_request.len;
         if (unfulfiled_len > buf1->len) {
             DELETE_POINTER(buf1);
             buf1 = buf2;
@@ -208,7 +206,8 @@ bool IoHandler::HandleClientRequest(int idx)
     }
 
     DEBUG("iohandler %d: last from client %s:%d fd %d unfulfiled data len %d byts\n",
-            _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd, unfulfiled_len);
+          _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd, unfulfiled_len);
+
 
     struct iovec vec[2];
     vec[0].iov_base = buf1->buf + buf1->offset + unfulfiled_len;
@@ -246,8 +245,8 @@ bool IoHandler::HandleClientRequest(int idx)
     remain_data_len -= handle_len;
 
     // 剩余读到的buf长度大于最小包长
-    uint32_t next_packet_remain_data = 0;
-    uint32_t next_packet_theory_len = 0;
+    int next_packet_remain_data = 0;
+    int next_packet_theory_len = 0;
     if (remain_data_len >= _minimum_packet_len) {
         char * p = nullptr;
         char tmpbuf[_minimum_packet_len];
@@ -347,11 +346,11 @@ bool IoHandler::HandleClientRequest(int idx)
     return true;
 }
 
-int IoHandler::HandleClientBuf(int idx, RcBuf *rcbuf, uint32_t len)
+int IoHandler::HandleClientBuf(int idx, RcBuf *rcbuf, int len)
 {
-    uint32_t remain_data_len = len > rcbuf->len ? rcbuf->len : len;
-    uint32_t handle_len = 0;
-    uint32_t theory_packet_len = 0;
+    int remain_data_len = len > rcbuf->len ? rcbuf->len : len;
+    int handle_len = 0;
+    int theory_packet_len = 0;
 
     IoHandlerReqToWorkerPack req;
     req.fdinfo = &_fd_array[idx];
@@ -409,7 +408,7 @@ bool IoHandler::SendDataToClient(FdInfo & fdinfo)
     int size = fdinfo._to_send.size();
     if (unlikely(size > max_iovec_count)) {
         LogErr("iohandler %d: _to_send buf is too large close client fd %d, cient %s:%d\n",
-               _handler_id, fdinfo.fd, IpToString(fdinfo.client_ip).c_str());
+               _handler_id, fdinfo.fd, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port);
         return false;
     }
 

@@ -29,8 +29,8 @@ Logger::~Logger()
 {
 }
 
-bool Logger::Initialize(const char* path, const uint32_t max_file_size,
-                       const uint32_t max_file_num, const LogLevel level)
+bool Logger::Initialize(const char* path, const int max_file_size,
+                       const int max_file_num, const LogLevel level)
 {
     _log_filter = level;
     return _writer.Initialize(path, max_file_size, max_file_num, ".log");
@@ -41,8 +41,8 @@ const std::string & Logger::GetErrMsg()
     return _writer.GetErrMsg();
 }
 
-bool Logger::Initialize(const char * path, const uint32_t max_file_size,
-               const uint32_t max_file_num, const char * str_level)
+bool Logger::Initialize(const char * path, const int max_file_size,
+               const int max_file_num, const char * str_level)
 {
     LogLevel level = GetLevel(str_level);
     return Initialize(path, max_file_size, max_file_num, level);

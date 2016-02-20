@@ -22,7 +22,7 @@ extern ef::GlobalConfigure gGlobalConfigure;
 
 namespace ef {
 
-Acceptor::Acceptor(unsigned short *port_arr, uint32_t len)
+Acceptor::Acceptor(unsigned short *port_arr, int len)
     : _acceptor_id(0)
     , _run_flag(true)
     , _poller(new Poller(gGlobalConfigure.acceptor_max_event_num))
@@ -31,7 +31,7 @@ Acceptor::Acceptor(unsigned short *port_arr, uint32_t len)
 {
     assert(_poller);
     assert(_listener);
-    for (uint32_t i=0; i<len; ++i) {
+    for (int i=0; i<len; ++i) {
         _listener[i].port = port_arr[i];
     }
 }
@@ -41,7 +41,7 @@ Acceptor::~Acceptor()
     Stop();
 
     if (_listener) {
-        for (uint32_t i=0; i<_listener_len; ++i) {
+        for (int i=0; i<_listener_len; ++i) {
             if (_listener[i].fd >= 0) {
                 safe_close(_listener[i].fd);
                 LogKey("close listen socket on port %d\n", _listener[i].port);
@@ -61,7 +61,7 @@ Acceptor::~Acceptor()
 
 bool Acceptor::CreateListenSocket()
 {
-    for (uint32_t i=0; i<_listener_len; ++i) {
+    for (int i=0; i<_listener_len; ++i) {
         // TODO socket param
         LogKey("try to listen on port %d\n", _listener[i].port);
         _listener[i].fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -106,7 +106,7 @@ bool Acceptor::Initialize(int id)
         return false;
     }
 
-    for (uint32_t i=0; i<_listener_len; ++i) {
+    for (int i=0; i<_listener_len; ++i) {
         if (_poller->Add(_listener[i].fd, i, EPOLLIN) < 0) {       // TODO 只监听EPOLLIN么?其他的事件呢?
             _errmsg = "error happend when add listen fd to poller, " + _poller->GetErrMsg();
             LogErr("error happend when add listen fd to poller, errmsg: %s\n",

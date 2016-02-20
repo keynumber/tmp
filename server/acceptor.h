@@ -6,7 +6,6 @@
 #ifndef __SERVER_ACCEPTOR_H_H___
 #define __SERVER_ACCEPTOR_H_H___
 
-#include <stdint.h>
 #include <arpa/inet.h>      // for htons
 
 #include <string>
@@ -23,7 +22,7 @@ class Acceptor
 {
     friend class MessageCenter;
 public:
-    Acceptor (unsigned short *port_arr, uint32_t len);
+    Acceptor (unsigned short *port_arr, int len);
     virtual ~Acceptor ();
 
     bool Initialize(int id);
@@ -47,7 +46,7 @@ private:
 
     Poller *_poller;
     ListenerInfo *_listener;
-    uint32_t _listener_len;
+    int _listener_len;
 
     std::string _errmsg;
 };

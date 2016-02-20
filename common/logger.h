@@ -27,10 +27,10 @@ public:
     Logger(const char *file, int line);
     virtual ~Logger();
 
-    static bool Initialize(const char * path, const uint32_t max_file_size,
-                          const uint32_t max_file_num, const LogLevel level);
-    static bool Initialize(const char * path, const uint32_t max_file_size,
-                          const uint32_t max_file_num, const char * level);
+    static bool Initialize(const char * path, const int max_file_size,
+                          const int max_file_num, const LogLevel level);
+    static bool Initialize(const char * path, const int max_file_size,
+                          const int max_file_num, const char * level);
     static void SetLogLevel(LogLevel log_level);
 
     static void SetLogFilter(LogLevel filter);

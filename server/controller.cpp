@@ -113,7 +113,7 @@ void Controller::StopServer()
 bool Controller::InitAcceptor()
 {
     std::vector<unsigned short> listen_ports = GetListenPorts();
-    for (uint32_t i=0; i<gGlobalConfigure.acceptor_count; ++i) {
+    for (int i=0; i<gGlobalConfigure.acceptor_count; ++i) {
         Acceptor * acceptor = new Acceptor(listen_ports.data(), listen_ports.size());
         assert(acceptor);
         _acceptors.push_back(acceptor);
@@ -128,7 +128,7 @@ bool Controller::InitAcceptor()
 
 bool Controller::InitIoHandler()
 {
-    for (uint32_t i=0; i<gGlobalConfigure.iohandler_count; ++i) {
+    for (int i=0; i<gGlobalConfigure.iohandler_count; ++i) {
         IoHandler * iohandler = new IoHandler();
         assert(iohandler);
         _iohandlers.push_back(iohandler);
@@ -143,7 +143,7 @@ bool Controller::InitIoHandler()
 
 bool Controller::InitWorker()
 {
-    for (uint32_t i=0; i<gGlobalConfigure.woker_count; ++i) {
+    for (int i=0; i<gGlobalConfigure.woker_count; ++i) {
         Worker * worker = new Worker();
         assert(worker);
         _workers.push_back(worker);

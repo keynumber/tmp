@@ -12,7 +12,7 @@ namespace ef {
 
 std::string JoinPath(const std::string &p1, const std::string &p2);
 
-inline std::string IpToString(uint32_t ip)
+inline std::string IpToString(int ip)
 {
     char buf[32];
     snprintf(buf, 32, "%d.%d.%d.%d", (ip>>0 )&0xFF,

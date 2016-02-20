@@ -31,7 +31,7 @@ public:
         , _counter(nullptr)
         , _is_released(true) {}
 
-    RcBuf(uint32_t buflen)
+    RcBuf(int buflen)
         : buf(new char[buflen])
         , offset(0)
         , len(buflen)
@@ -72,6 +72,7 @@ public:
         } else {
             _is_released = true;
         }
+        return *this;
     }
 
     virtual ~RcBuf() {
@@ -101,7 +102,7 @@ public:
         }
     }
 
-    void Copy(const RcBuf & rcbuf, uint32_t o, uint32_t l)
+    void Copy(const RcBuf & rcbuf, int o, int l)
     {
         Release();
 
@@ -120,8 +121,8 @@ public:
 
 public:
     char * buf;             // 需要传递的buf
-    uint32_t offset;        // 内容在buffer中的偏移
-    uint32_t len;           // 内容的长度
+    int offset;        // 内容在buffer中的偏移
+    int len;           // 内容的长度
 
 private:
     uint32_t * _counter;

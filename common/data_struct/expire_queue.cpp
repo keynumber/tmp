@@ -10,7 +10,7 @@
 
 namespace ef {
 
-ExpireQueue::ExpireQueue(uint32_t capacity)
+ExpireQueue::ExpireQueue(int capacity)
     : _queue_pre(new int[capacity+1])
     , _queue_next(new int[capacity+1])
     , _capacity(capacity)
