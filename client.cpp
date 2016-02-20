@@ -13,9 +13,14 @@
 #include <time.h>
 
 #include <iostream>
+#include <random>
 
 using namespace std;
 
+struct PacketHeader {
+    int length;         // length为包请求内容大小,不包括包头大小
+    unsigned int request_id;
+};
 
 #define MAX_EVENTS 1000
 #define BUFFER_SIZE 1000
@@ -24,37 +29,51 @@ using namespace std;
 uint32_t suc = 0;
 uint32_t fail = 0;
 
-const int buflen = 10240;
-char send_buf[buflen];
-int buf_content_len = 0;
-
-void generator_sendbuf(int n)
+int generator_sendbuf(char *buf, int len)
 {
-    const char * str = "hello world";
-    int len = strlen(str);
-    for (int i=0; i< n; i++) {
-        *(uint32_t*)(send_buf+buf_content_len) = len;
-        buf_content_len += sizeof(uint32_t);
-        memcpy(send_buf+buf_content_len, str, len);
-        buf_content_len += len;
+    const char * str[] = {"one", "two", "three", "four", "five", "six", "seven", "eight", "nine"};
+    int str_len = sizeof(str)/sizeof(char*);
+
+    memset(buf, 0, len);
+    PacketHeader * header = (PacketHeader*)buf;
+    buf += sizeof(PacketHeader);
+    random_device rd;
+    for (int i=0; i< 3; i++) {
+        int t = rd() % str_len;
+        strcat(buf, str[t]);
+        strcat(buf, ">");
     }
+
+    int content_len = strlen(buf);
+    header->length = content_len;
+    header->request_id = rd();
+    cout << "content_len: " << header->length << ", request_id: " << header->request_id << ", ";
+    cout << "content: " << buf << endl;
+    return sizeof(PacketHeader) + strlen(buf);
 }
 
 int write_to_server(int fd) {
+    const int buflen = 10240;
+    char buf[buflen];
 
-    generator_sendbuf(100);
+    int idx = 0;
+    for (int i=0; i<10; ++i) {
+        idx += generator_sendbuf(buf + idx, buflen - idx);
+    }
+
     int send_len = 0;
-    int totoal_send = send_len;
+    int total_send = send_len;
     while (true) {
         cin >> send_len;
         if (send_len < 0)
             break;
-        int ret = write(fd, send_buf + totoal_send, send_len);
+        cout << "offset: " << total_send << endl;
+        int ret = write(fd, buf + total_send, send_len);
         if (ret != send_len) {
             perror("write failed");
             return -1;
         }
-        totoal_send += send_len;
+        total_send += send_len;
     }
     return 0;
 }
