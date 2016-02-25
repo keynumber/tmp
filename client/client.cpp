@@ -19,13 +19,6 @@
 
 using namespace std;
 
-
-struct PacketHeader {
-    int length;         // length为包请求内容大小,不包括包头大小
-    unsigned int request_id;
-    char payload[0];
-};
-
 const unsigned short server_port = 12345;
 const char * server_addr = "127.0.0.1";
 
@@ -39,7 +32,7 @@ int generator_sendbuf(char *buf, int len)
 
     memset(buf, 0, len);
 
-    PacketHeader * header = (PacketHeader*)buf;
+    ef::PacketHeader * header = (ef::PacketHeader*)buf;
     random_device rd;
     int t = rd() % str_len;
     strcat(header->payload, str[t]);
@@ -49,7 +42,7 @@ int generator_sendbuf(char *buf, int len)
     header->request_id = rd();
     cout << "content_len: " << header->length << ", request_id: " << header->request_id << ", ";
     cout << "content: " << header->payload << endl;
-    return sizeof(PacketHeader) + content_len;
+    return sizeof(ef::PacketHeader) + content_len;
 }
 
 int write_to_server(int fd, char *buf, int len) {
@@ -61,12 +54,12 @@ int write_to_server(int fd, char *buf, int len) {
             perror("write to server failed, errmsg: ");
             return -1;
         }
-
+        total_send += send_len;
         if (total_send == send_len) {
             break;
         }
-        total_send += send_len;
     }
+    printf("totoal send len %d\n", len);
     return 0;
 }
 
@@ -119,7 +112,7 @@ int request_server()
     len = generator_sendbuf(buf, buflen);
     int ret = write_to_server(conn, buf, len);
     if (read_from_server(conn, buf, buflen) > 0) {
-        PacketHeader * header = (PacketHeader*)buf;
+        ef::PacketHeader * header = (ef::PacketHeader*)buf;
         printf("read from server length %d, request_id %d, payload: %s\n",
                 header->length, header->request_id, header->payload);
     }
