@@ -26,10 +26,11 @@ public:
     bool Initialize(int id);
     void Run();
     void Stop();
-    const std::string & GetErrMsg() const;
 
-private:
-    int HandleClientRequest(const ClientReqPack & obj);
+    // 启动server前必须注册处理函数
+    void RegistClientRequestHandler(void (*handler)(int handler_id, const ClientReqPack & req));
+
+    const std::string & GetErrMsg() const;
 
 private:
     int _worker_id;
@@ -39,6 +40,7 @@ private:
 
     // acceptor接收到的连接传递到iohandler
     TaskQueue<ClientReqPack> _client_req_queue;
+    void (*_client_request_handler)(int handler_id, const ClientReqPack & req);
 
     const int _packet_header_len;
     std::string _errmsg;

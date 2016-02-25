@@ -28,10 +28,10 @@ namespace ef {
     container.clear();                      \
 } while (0)
 
-#define CONTAINER_DO(container, todo) do {  \
-    for (auto & it : container) {           \
-        it->todo();                         \
-    }                                       \
+#define CONTAINER_DO(container, todo, ...) do {     \
+    for (auto & it : container) {                   \
+        it->todo(__VA_ARGS__);                      \
+    }                                               \
 } while (0)
 
 Controller::Controller()
@@ -59,7 +59,7 @@ bool Controller::InitServer()
     // }
 
     // ef::Logger::SetLogLevel(gGlobalConfigure.log_level);
-    ef::Logger::SetLogLevel(kLevelFrame);
+    ef::Logger::SetLogLevel(kLevelErr);
 
     // TODO
     if (!InitAcceptor() || !InitIoHandler() || !InitWorker()) {
@@ -158,6 +158,11 @@ bool Controller::InitWorker()
         }
     }
     return true;
+}
+
+void Controller::RegistClientRequestHandler(void (*handler)(int handler_id, const ClientReqPack & req))
+{
+    CONTAINER_DO(_workers, RegistClientRequestHandler, handler);
 }
 
 std::vector<unsigned short> Controller::GetListenPorts()

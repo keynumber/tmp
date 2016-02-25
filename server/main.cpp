@@ -2,6 +2,7 @@
 
 #include "controller.h"
 #include "common/logger.h"
+#include "request_handler.h"
 
 int main(int argc, char *argv[])
 {
@@ -10,6 +11,7 @@ int main(int argc, char *argv[])
         LogErr("controller InitServer failed, errmsg: %s\n", controller.GetErrMsg().c_str());
         return -1;
     }
+    controller.RegistClientRequestHandler(ef::HandleClientRequest);
 
     controller.StartServer();               // start
 

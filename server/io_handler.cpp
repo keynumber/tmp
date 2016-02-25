@@ -436,10 +436,12 @@ bool IoHandler::SendDataToClient(FdInfo & fdinfo)
     auto next = it;
     while (ret > 0) {
         it = next;
-        next = ++it;
+        // next = ++it;     .... TODO
+        // next = it + 1;
         if (ret >= it->len) {
             ret -= it->len;
-            fdinfo._to_send.erase(it);
+            // fdinfo._to_send.erase(it);
+            fdinfo._to_send.erase(it++);
         } else {
             it->len -= ret;
             it->offset += ret;

@@ -14,16 +14,21 @@
 
 #include <iostream>
 #include <random>
+#include <thread>
 
 #include "server/net_complete_func.h"
 
+#ifdef USE_DEBUG
+#define DEBUG(...) printf(__VA_ARGS__)
+#else
+#define DEBUG(...)
+#endif
+
 using namespace std;
 
+const int max_thread_num = 200;
 const unsigned short server_port = 12345;
 const char * server_addr = "127.0.0.1";
-
-uint32_t suc = 0;
-uint32_t fail = 0;
 
 int generator_sendbuf(char *buf, int len)
 {
@@ -40,8 +45,7 @@ int generator_sendbuf(char *buf, int len)
     int content_len = strlen(header->payload);
     header->length = content_len;
     header->request_id = rd();
-    cout << "content_len: " << header->length << ", request_id: " << header->request_id << ", ";
-    cout << "content: " << header->payload << endl;
+    DEBUG("content_len: %d, request_id: %d, content: %s\n", header->length, header->request_id, header->payload);
     return sizeof(ef::PacketHeader) + content_len;
 }
 
@@ -59,7 +63,7 @@ int write_to_server(int fd, char *buf, int len) {
             break;
         }
     }
-    printf("totoal send len %d\n", len);
+    DEBUG("totoal send len %d\n", len);
     return 0;
 }
 
@@ -78,7 +82,7 @@ int read_from_server(int clientfd, char *buf, int len)
         total_read += ret;
         ret = ef::packet_len_func(buf, total_read, &packet_len);
         if (ret < 0) {
-            printf("packet_len_func error\n");
+            DEBUG("packet_len_func error\n");
             break;
         } else if (ret > 0){
             return ret;
@@ -113,16 +117,17 @@ int request_server()
     int ret = write_to_server(conn, buf, len);
     if (read_from_server(conn, buf, buflen) > 0) {
         ef::PacketHeader * header = (ef::PacketHeader*)buf;
-        printf("read from server length %d, request_id %d, payload: %s\n",
+        DEBUG("read from server length %d, request_id %u, payload: %s\n",
                 header->length, header->request_id, header->payload);
     }
     close(conn);
     return ret;
 }
 
-int main(int argc, char * argv[])
+void request_server_ntimes(int id, int n)
 {
-    int n = atoi(argv[1]);
+    int suc = 0;
+    int fail = 0;
     for (int i=0; i<n; ++i) {
         if (request_server() < 0) {
             fail++;
@@ -130,6 +135,26 @@ int main(int argc, char * argv[])
             suc ++;
         }
     }
-    printf("suc: %d\nfail: %d\n", suc, fail);
+    printf("thread id: %d, suc: %d, fail: %d\n", id, suc, fail);
+}
+
+int main(int argc, char * argv[])
+{
+    if (argc < 3) {
+        printf("usage %s <thread num> <query times per thread>\n", argv[0]);
+        return -1;
+    }
+
+    int nthread = atoi(argv[1]);
+    int ntimes = atoi(argv[2]);
+
+    vector<thread> vec;
+    for (int i=0; i<nthread; ++i) {
+        vec.push_back(thread(request_server_ntimes, i, ntimes));
+    }
+
+    for (auto &it : vec) {
+        it.join();
+    }
     return 0;
 }

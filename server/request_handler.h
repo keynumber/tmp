@@ -9,16 +9,11 @@
 #include "comm_struct.h"
 #include "../common/rc_buf.h"
 
+// TODO 测试后需要删除
+
 namespace ef {
 
-class RequestHandler {
-public:
-    RequestHandler();
-    virtual ~RequestHandler();
-
-    virtual int RequestHandler(const FdInfo & fdinfo, const RcBuf & rcbuf) = 0;
-    virtual int RspToClient(const FdInfo & fdinfo, const RcBuf & rcbuf) = 0;
-};
+void HandleClientRequest(int handler_id, const ClientReqPack &req);
 
 } /* namespace ef */
 
