@@ -36,7 +36,7 @@ public:
 private:
     bool HandleAcceptClient(const AcceptInfo & accinfo);
     bool HandleClientRequest(int idx);
-    bool HandleWorkerRsp(const WorkerRspToIoHandlerPack & rsp);
+    bool HandleWorkerRsp(const ServerRspPack & rsp);
     bool SendDataToClient(FdInfo & fdinfo);
     // < 0 出错
     // > 0 返回处理数据的长度
@@ -58,7 +58,7 @@ private:
     // acceptor接收到的连接传递到iohandler
     TaskQueue<AcceptInfo> _accept_queue;
     // worker发送响应数据到iohandler
-    TaskQueue<WorkerRspToIoHandlerPack> _worker_queue;
+    TaskQueue<ServerRspPack> _worker_queue;
 
     ppacket_len_func _packet_len_func;
     pheader_len_func _header_len_func ;

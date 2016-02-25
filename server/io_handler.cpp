@@ -113,7 +113,7 @@ void IoHandler::Run()
             }
             case kWorkerRspToIohandlerQueue:
             {
-                WorkerRspToIoHandlerPack rsp;
+                ServerRspPack rsp;
                 if (unlikely(!_worker_queue.Take(&rsp))) {
                     LogWarn("iohandle %d: worker has notified but no response message\n", _handler_id);
                     continue;
@@ -300,7 +300,7 @@ bool IoHandler::HandleClientRequest(int idx)
         // (因为HandleClientBuf会处理,直到不能构成一个完整的包)
         if (next_packet_remain_data >= _header_len &&
             next_packet_remain_data >= _header_len + next_packet_theory_len) {
-            IoHandlerReqToWorkerPack req;
+            ClientReqPack req;
             req.fdinfo = &_fd_array[idx];
             req.handler_id = _handler_id;
             req.request_buf = tmpbuf;
@@ -354,7 +354,7 @@ int IoHandler::HandleClientBuf(int idx, RcBuf *rcbuf, int len)
     int handle_len = 0;
     int theory_packet_len = 0;
 
-    IoHandlerReqToWorkerPack req;
+    ClientReqPack req;
     req.fdinfo = &_fd_array[idx];
     req.handler_id = _handler_id;
     while (remain_data_len >= _header_len) {
@@ -397,7 +397,7 @@ void IoHandler::CloseClientConn(int idx)
     safe_close(fd);
 }
 
-bool IoHandler::HandleWorkerRsp(const WorkerRspToIoHandlerPack & rsp)
+bool IoHandler::HandleWorkerRsp(const ServerRspPack & rsp)
 {
     FdInfo & fdinfo = *rsp.fdinfo;
     fdinfo._to_send.push_back(rsp.response_buf);

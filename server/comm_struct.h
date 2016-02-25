@@ -44,13 +44,13 @@ enum class NotifyCmd : unsigned char {
     DisconnectExtSvr
 };
 
-struct IoHandlerReqToWorkerPack {
+struct ClientReqPack {
     int handler_id;
     FdInfo *fdinfo;
     ef::RcBuf request_buf;
 };
 
-struct WorkerRspToIoHandlerPack {
+struct ServerRspPack {
     int handler_id;
     FdInfo *fdinfo;
     ef::RcBuf response_buf;

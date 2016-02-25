@@ -29,7 +29,7 @@ public:
     const std::string & GetErrMsg() const;
 
 private:
-    int HandleClientRequest(const IoHandlerReqToWorkerPack & obj);
+    int HandleClientRequest(const ClientReqPack & obj);
 
 private:
     int _worker_id;
@@ -38,7 +38,7 @@ private:
     Poller _poller;
 
     // acceptor接收到的连接传递到iohandler
-    TaskQueue<IoHandlerReqToWorkerPack> _client_req_queue;
+    TaskQueue<ClientReqPack> _client_req_queue;
 
     const int _packet_header_len;
     std::string _errmsg;

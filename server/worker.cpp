@@ -62,7 +62,7 @@ void Worker::Run()
             _poller.GetEvent(&key, &events);
             assert(key >= 0);
 
-            IoHandlerReqToWorkerPack req;
+            ClientReqPack req;
             if (unlikely(!_client_req_queue.Take(&req))) {
                 LogWarn("no message");
                 continue;
@@ -74,7 +74,7 @@ void Worker::Run()
     LogKey("worker %d stop running\n", _worker_id);
 }
 
-int Worker::HandleClientRequest(const IoHandlerReqToWorkerPack &req)
+int Worker::HandleClientRequest(const ClientReqPack &req)
 {
     const RcBuf & rcbuf = req.request_buf;
 

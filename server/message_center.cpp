@@ -56,7 +56,7 @@ void MessageCenter::PostAcceptClient(const AcceptInfo & accept_info)
     _iohandlers[idx]->_accept_queue.Put(accept_info);
 }
 
-void MessageCenter::PostClientReqToWorker(const IoHandlerReqToWorkerPack &req)
+void MessageCenter::PostClientReqToWorker(const ClientReqPack &req)
 {
     int size = _workers.size();
     assert(size > 0);
@@ -68,7 +68,7 @@ void MessageCenter::PostClientReqToWorker(const IoHandlerReqToWorkerPack &req)
     _workers[idx]->_client_req_queue.Put(req);
 }
 
-void MessageCenter::PostSvrRspToClient(int iohandler_id, const WorkerRspToIoHandlerPack & rsp)
+void MessageCenter::PostSvrRspToClient(int iohandler_id, const ServerRspPack & rsp)
 {
     _iohandlers[iohandler_id]->_worker_queue.Put(rsp);
 }
