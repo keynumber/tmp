@@ -18,9 +18,9 @@ void HandleClientRequest(int handler_id, const ClientReqPack &req)
     PacketHeader * header = (PacketHeader*)(rcbuf.buf + rcbuf.offset);
     char * buf = rcbuf.buf + rcbuf.offset + sizeof(PacketHeader);
 
-    printf("worker %d: get request from iohandler buf offset %d, buf len %d, content len: %d, request id: %d\n",
-          handler_id, rcbuf.offset, rcbuf.len, header->length, header->request_id);
-    printf("request buf: |%s|\n", buf);
+    // printf("worker %d: get request from iohandler buf offset %d, buf len %d, content len: %d, request id: %d\n",
+    //       handler_id, rcbuf.offset, rcbuf.len, header->length, header->request_id);
+    // printf("request buf: |%s|\n", buf);
 
     for (int i = 0; i<header->length; ++i) {
         if(buf[i] >= 'a' && buf[i] <= 'z')
