@@ -68,4 +68,9 @@ void MessageCenter::PostClientReqToWorker(const IoHandlerReqToWorkerPack &req)
     _workers[idx]->_client_req_queue.Put(req);
 }
 
+void MessageCenter::PostSvrRspToClient(int iohandler_id, const WorkerRspToIoHandlerPack & rsp)
+{
+    _iohandlers[iohandler_id]->_worker_queue.Put(rsp);
+}
+
 } /* namespace ef */
