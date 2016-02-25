@@ -12,6 +12,7 @@ namespace ef
 struct PacketHeader {
     int length;         // length为包请求内容大小,不包括包头大小
     unsigned int request_id;
+    char payload[0];
 };
 
 // buf 为数据内容指针

@@ -302,6 +302,7 @@ bool IoHandler::HandleClientRequest(int idx)
             next_packet_remain_data >= _header_len + next_packet_theory_len) {
             IoHandlerReqToWorkerPack req;
             req.fdinfo = &_fd_array[idx];
+            req.handler_id = _handler_id;
             req.request_buf = tmpbuf;
             MessageCenter::PostClientReqToWorker(req);
 
@@ -355,6 +356,7 @@ int IoHandler::HandleClientBuf(int idx, RcBuf *rcbuf, int len)
 
     IoHandlerReqToWorkerPack req;
     req.fdinfo = &_fd_array[idx];
+    req.handler_id = _handler_id;
     while (remain_data_len >= _header_len) {
         int ret = _packet_len_func(rcbuf->buf + rcbuf->offset, remain_data_len, &theory_packet_len);
         if (likely(ret > 0)) {

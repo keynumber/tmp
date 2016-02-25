@@ -42,11 +42,13 @@ enum class NotifyCmd : unsigned char {
 };
 
 struct IoHandlerReqToWorkerPack {
+    int handler_id;
     FdInfo *fdinfo;
     ef::RcBuf request_buf;
 };
 
 struct WorkerRspToIoHandlerPack {
+    int handler_id;
     FdInfo *fdinfo;
     ef::RcBuf response_buf;
 };
