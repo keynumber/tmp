@@ -7,6 +7,9 @@
 
 #include "common/rc_buf.h"
 
+namespace ef
+{
+
 enum FdType{
     kAcceptorToIohandlerQueue,
     kWorkerRspToIohandlerQueue,
@@ -52,5 +55,7 @@ struct WorkerRspToIoHandlerPack {
     FdInfo *fdinfo;
     ef::RcBuf response_buf;
 };
+
+} /* namespace ef */
 
 #endif /* __COMM_STRUCT_H__ */

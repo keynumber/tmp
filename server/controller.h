@@ -12,6 +12,8 @@
 #include <string>
 #include <thread>
 
+#include "comm_struct.h"
+
 namespace ef {
 
 class Acceptor;
@@ -32,8 +34,11 @@ public:
     void StopServer();      // 暂停运行,可以通过StartServer重新启动,暂停前所有的状态/数据都不会丢失
                             // 如果想要终止server,可以通过析构Controller进行
 
-    void RegisterHandler();
+    void RegisterHandler(void (*pHandleClientRequestFunc)(const IoHandlerReqToWorkerPack & req));
 
+    const std::string GetErrMsg() const;
+
+private:
     // TODO below
     bool AddAcceptor();
     bool AddIoHandler();
@@ -44,9 +49,6 @@ public:
     bool ReportServerStatus() const;
     // TODO upon
 
-    const std::string GetErrMsg() const;
-
-private:
     bool InitAcceptor();
     bool InitIoHandler();
     bool InitWorker();
