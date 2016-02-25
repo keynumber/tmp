@@ -11,7 +11,7 @@
 
 #include "macro.h"
 
-#define __RC_DEBUG__
+// #define __RC_DEBUG__
 #ifdef __RC_DEBUG__
 #include <stdio.h>
 #define RCDEBUG(fmt, ...) printf(fmt, ##__VA_ARGS__)

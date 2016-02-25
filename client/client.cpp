@@ -18,6 +18,7 @@
 
 #include "server/net_complete_func.h"
 
+// #define USE_DEBUG
 #ifdef USE_DEBUG
 #define DEBUG(...) printf(__VA_ARGS__)
 #else
