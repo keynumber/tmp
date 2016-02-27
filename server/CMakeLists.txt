@@ -22,7 +22,7 @@ ADD_EXECUTABLE(server   ./main.cpp
                         ../common/util.cpp
                         ../common/poller.cpp)
 
-set(CMAKE_CXX_FLAGS "-std=c++11 -pthread -g -Wall")
+set(CMAKE_CXX_FLAGS "-std=c++11 -pthread -g -Wall -Wreturn-type -Wunused-value -Wunused-parameter -Wsign-conversion -Wparentheses")
 
 include_directories(..)
 

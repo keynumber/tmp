@@ -92,14 +92,7 @@ void IoHandler::Run()
 
         for (int i=0; i<event_num; ++i) {
             _poller.GetEvent(&key, &events);
-            assert(key >= 0);
-            if (unlikely(!(events & EPOLLIN))) {
-                LogErr("iohandler %d: get event not EPOLLIN, but %d, fd index: %d\n",
-                        _handler_id, events, (uint32_t)key);
-                continue;
-            }
-
-            const FdInfo & fdinfo = _fd_array[key];
+            FdInfo & fdinfo = _fd_array[key];
             switch (fdinfo.type) {
             case kAcceptorToIohandlerQueue:
             {
@@ -118,12 +111,17 @@ void IoHandler::Run()
                     LogWarn("iohandle %d: worker has notified but no response message\n", _handler_id);
                     continue;
                 }
-                HandleWorkerRsp(rsp);
+                HandleWorkerRsp(rsp);               // 写请求不改变fd最后活跃时间
                 break;
             }
             case kClientFd:
             {
-                HandleClientRequest(key);
+                if (likely(events & EPOLLIN)) {
+                    HandleClientRequest(key);       // 读请求会改变最后活跃时间
+                } else if (events & EPOLLOUT){
+                    SendDataToClient(fdinfo);       // 写请求不改变fd最后活跃时间
+                }
+
                 break;
             }
             default:
@@ -157,6 +155,7 @@ bool IoHandler::HandleAcceptClient(const AcceptInfo & accinfo)
 
     int client_idx= _fd_array.Push(FdInfo());
     _fd_array[client_idx].fd = accinfo.fd;
+    _fd_array[client_idx].idx = client_idx;
     _fd_array[client_idx].client_ip = accinfo.addr.sin_addr.s_addr;
     _fd_array[client_idx].client_port = accinfo.addr.sin_port;
     _fd_array[client_idx].type = kClientFd;
@@ -402,51 +401,62 @@ bool IoHandler::HandleWorkerRsp(const ServerRspPack & rsp)
     FdInfo & fdinfo = *rsp.fdinfo;
     fdinfo._to_send.push_back(rsp.response_buf);
     return SendDataToClient(fdinfo);
-    // TODO epollout when data is not all sent
 }
 
 bool IoHandler::SendDataToClient(FdInfo & fdinfo)
 {
-    const int max_iovec_count = 10 * 1024;
+    const int max_iovec_count = 128;
     int size = fdinfo._to_send.size();
-    if (unlikely(size > max_iovec_count)) {
+    if (unlikely(size > max_iovec_count)) {     // 超过最大长度,认为客户端连接出问题,直接关闭
         LogErr("iohandler %d: _to_send buf is too large close client fd %d, cient %s:%d\n",
                _handler_id, fdinfo.fd, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port);
+        CloseClientConn(fdinfo.idx);
         return false;
     }
 
+    int total_need_send = 0;
     int cnt = 0;
     struct iovec towrite[max_iovec_count];
     for (const auto & it : fdinfo._to_send) {
         towrite[cnt].iov_base = it.buf + it.offset;
         towrite[cnt].iov_len = it.len;
+        total_need_send += it.len;
         ++cnt;
     }
 
     int fd = fdinfo.fd;
-    int ret = safe_writev(fd, towrite, cnt);
-    if (unlikely( ret < 0)) {
+    int write_bytes = safe_writev(fd, towrite, cnt);
+    if (unlikely( write_bytes < 0)) {
         LogErr("iohandler %d: write fd %d failed, cient %s:%d, errmsg: %s\n",
                _handler_id, fdinfo.fd, IpToString(fdinfo.client_ip).c_str(),
                ntohs(fdinfo.client_port), safe_strerror(errno).c_str());
+        CloseClientConn(fdinfo.idx);
         return false;
     }
 
+    int tmp = write_bytes;
     auto it = fdinfo._to_send.begin();
     auto next = it;
-    while (ret > 0) {
+    while (tmp > 0) {
         it = next;
         // next = ++it;     .... TODO
         // next = it + 1;
-        if (ret >= it->len) {
-            ret -= it->len;
+        if (tmp >= it->len) {
+            tmp -= it->len;
             // fdinfo._to_send.erase(it);
             fdinfo._to_send.erase(it++);
         } else {
-            it->len -= ret;
-            it->offset += ret;
+            it->len -= tmp;
+            it->offset += tmp;
             break;
         }
+    }
+
+    if (unlikely(write_bytes < total_need_send)) {
+        _poller.Add(fd, fdinfo.idx, EPOLLOUT);
+        DEBUG("iohandler %d: write fd %d cient %s:%d %d bytes, need total write %d bytes,add EPOLLOUT\n",
+               _handler_id, fd, IpToString(fdinfo.client_ip).c_str(), ntohs(fdinfo.client_port),
+                write_bytes, total_need_send);
     }
     return true;
 }
