@@ -15,6 +15,7 @@
 #include <iostream>
 #include <random>
 #include <thread>
+#include <algorithm>
 
 #include "server/net_complete_func.h"
 
@@ -46,7 +47,6 @@ int generator_sendbuf(char *buf, int len)
     int content_len = strlen(header->payload);
     header->length = content_len;
     header->request_id = rd();
-    DEBUG("content_len: %d, request_id: %d, content: %s\n", header->length, header->request_id, header->payload);
     return sizeof(ef::PacketHeader) + content_len;
 }
 
@@ -92,7 +92,22 @@ int read_from_server(int clientfd, char *buf, int len)
     return -1;
 }
 
-int request_server()
+bool check_response(char *send, char * recv) {
+    char * p = send;
+    while (*p) {
+        if (*p >= 'a' && *p <= 'z') {
+            *p = *p - 'a' + 'A';
+            p++;
+        }
+    }
+
+    return strcmp(send, recv) == 0;
+}
+
+// return -1, request server failed
+// return -2, response is not correct
+// return 0, succeed
+int short_conn_request_svr()
 {
     struct sockaddr_in conn_addr;
     int len = sizeof(struct sockaddr_in);
@@ -113,30 +128,48 @@ int request_server()
     }
 
     const int buflen = 10240;
-    char buf[buflen];
-    len = generator_sendbuf(buf, buflen);
-    int ret = write_to_server(conn, buf, len);
-    if (read_from_server(conn, buf, buflen) > 0) {
-        ef::PacketHeader * header = (ef::PacketHeader*)buf;
-        DEBUG("read from server length %d, request_id %u, payload: %s\n",
-                header->length, header->request_id, header->payload);
+    char sendbuf[buflen];
+    char recvbuf[buflen];
+    ef::PacketHeader * send_header = (ef::PacketHeader*)sendbuf;
+
+    len = generator_sendbuf(sendbuf, buflen);
+    DEBUG("content_len: %d, request_id: %u, content: %s\n", send_header->length, send_header->request_id, send_header->payload);
+    if (write_to_server(conn, sendbuf, len) < 0) {
+        return -1;
     }
+    if (read_from_server(conn, recvbuf, buflen) < 0) {
+        return -1;
+    }
+
+    ef::PacketHeader * recv_header = (ef::PacketHeader*)recvbuf;
+    DEBUG("read from server length %d, request_id %u, payload: %s\n",
+            recv_header->length, recv_header->request_id, recv_header->payload);
+
+    if (recv_header->request_id != send_header->request_id ||
+        !check_response(send_header->payload, recv_header->payload)) {
+        return -2;
+    }
+
     close(conn);
-    return ret;
+    return 0;
 }
 
 void request_server_ntimes(int id, int n)
 {
     int suc = 0;
     int fail = 0;
+    int errrsp = 0;
     for (int i=0; i<n; ++i) {
-        if (request_server() < 0) {
+        int ret = short_conn_request_svr();
+        if (ret == -1) {
             fail++;
+        } else if (ret == -2) {
+            errrsp++;
         } else {
             suc ++;
         }
     }
-    printf("thread id: %d, suc: %d, fail: %d\n", id, suc, fail);
+    printf("thread id: %d, suc: %d, fail: %d, errrsp: %d\n", id, suc, fail, errrsp);
 }
 
 int main(int argc, char * argv[])
