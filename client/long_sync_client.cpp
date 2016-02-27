@@ -117,8 +117,39 @@ bool check_response(char *send, char * recv) {
 // return -1, request server failed
 // return -2, response is not correct
 // return 0, succeed
-int short_conn_request_svr()
+int long_conn_request_svr(int conn)
 {
+    const int buflen = 10240;
+    char sendbuf[buflen];
+    char recvbuf[buflen];
+    ef::PacketHeader * send_header = (ef::PacketHeader*)sendbuf;
+
+    int len = generator_sendbuf(sendbuf, buflen);
+    DEBUG("content_len: %d, request_id: %u, content: %s\n", send_header->length, send_header->request_id, send_header->payload);
+    if (write_to_server(conn, sendbuf, len) < 0) {
+        return -1;
+    }
+    if (read_from_server(conn, recvbuf, buflen) < 0) {
+        return -1;
+    }
+
+    ef::PacketHeader * recv_header = (ef::PacketHeader*)recvbuf;
+    DEBUG("read from server length %d, request_id %u, payload: %s\n",
+            recv_header->length, recv_header->request_id, recv_header->payload);
+
+    if (recv_header->request_id != send_header->request_id ||
+        !check_response(send_header->payload, recv_header->payload)) {
+        return -2;
+    }
+    return 0;
+}
+
+int request_server_ntimes(int id, int n)
+{
+    int suc = 0;
+    int fail = 0;
+    int errrsp = 0;
+
     struct sockaddr_in conn_addr;
     int len = sizeof(struct sockaddr_in);
 
@@ -137,40 +168,8 @@ int short_conn_request_svr()
         return -1;
     }
 
-    const int buflen = 10240;
-    char sendbuf[buflen];
-    char recvbuf[buflen];
-    ef::PacketHeader * send_header = (ef::PacketHeader*)sendbuf;
-
-    len = generator_sendbuf(sendbuf, buflen);
-    DEBUG("content_len: %d, request_id: %u, content: %s\n", send_header->length, send_header->request_id, send_header->payload);
-    if (write_to_server(conn, sendbuf, len) < 0) {
-        return -1;
-    }
-    if (read_from_server(conn, recvbuf, buflen) < 0) {
-        return -1;
-    }
-
-    ef::PacketHeader * recv_header = (ef::PacketHeader*)recvbuf;
-    DEBUG("read from server length %d\n", recv_header->length);
-    DEBUG("content_len: %d, request_id: %u, content: %s\n", recv_header->length, recv_header->request_id, recv_header->payload);
-
-    if (recv_header->request_id != send_header->request_id ||
-        !check_response(send_header->payload, recv_header->payload)) {
-        return -2;
-    }
-
-    close(conn);
-    return 0;
-}
-
-int request_server_ntimes(int id, int n)
-{
-    int suc = 0;
-    int fail = 0;
-    int errrsp = 0;
     for (int i=0; i<n; ++i) {
-        int ret = short_conn_request_svr();
+        int ret = long_conn_request_svr(conn);
         if (ret == -1) {
             fail++;
         } else if (ret == -2) {
@@ -180,6 +179,8 @@ int request_server_ntimes(int id, int n)
         }
     }
     printf("thread id: %d, suc: %d, fail: %d, errrsp: %d\n", id, suc, fail, errrsp);
+
+    close(conn);
     return 0;
 }
 
