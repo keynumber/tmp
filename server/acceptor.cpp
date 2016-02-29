@@ -107,7 +107,7 @@ bool Acceptor::Initialize(int id)
     }
 
     for (int i=0; i<_listener_len; ++i) {
-        if (_poller->Add(_listener[i].fd, i, EPOLLIN) < 0) {       // TODO 只监听EPOLLIN么?其他的事件呢?
+        if (_poller->Add(_listener[i].fd, i, EPOLLIN | EPOLLERR | EPOLLHUP) < 0) {       // TODO 只监听EPOLLIN么?其他的事件呢?
             _errmsg = "error happend when add listen fd to poller, " + _poller->GetErrMsg();
             LogErr("error happend when add listen fd to poller, errmsg: %s\n",
                     _poller->GetErrMsg().c_str());
@@ -125,7 +125,7 @@ void Acceptor::Run()
     _run_flag = true;
     while (_run_flag) {
         ret = _poller->Wait(100);  // block TODO how many milsec to wait
-        if (ret < 0) {
+        if (unlikely(ret < 0)) {
             LogErr("error happend when poller wait, errmsg: %s\n",
                     _poller->GetErrMsg().c_str());
             continue;
@@ -169,10 +169,12 @@ void Acceptor::Stop()
 
 bool Acceptor::SetSocketOption(int fd)
 {
-    fd = 0;
     // TODO
     // int option = 1;
     // setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, (char*)&option,sizeof(option));
+    if (set_nonblock(fd) < 0) {
+        _errmsg = "set_nonblock() error, " + safe_strerror(errno);
+    }
     return true;
 }
 

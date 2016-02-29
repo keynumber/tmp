@@ -15,6 +15,17 @@
         how to fix??????????????????//
 
 
+发现问题:
+    当client只连接,而不发送和接受数据,连接完直接关闭连接.当2个线程同时跑大量的连接,比如2个线程,分别跑
+    10000个连接,则进行几次后,connect会超时失败,具体的现象是:connect超时,抓包发现,connect过程,不停重发
+    SYN包.......没找到原因
+
+
+    /proc/sys/fs/file-max: 系统维度最大可以打开的文件个数
+
+    /etc/sysctl.conf    file-max
+    /etc/security/limits.conf  soft/hard
+
 
 
 2. server内部统计
