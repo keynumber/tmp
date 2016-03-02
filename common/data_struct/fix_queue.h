@@ -9,6 +9,8 @@
 #include <assert.h>
 #include <stdint.h>
 
+#include "common/macro.h"
+
 namespace ef {
 
 /**
@@ -35,7 +37,7 @@ public:
     virtual ~FixQueue()
     {
         assert(_queue != nullptr);
-        delete [] _queue;
+        DELETE_ARRAY(_queue);
     }
 
     FixQueue(const FixQueue & q) = delete;
@@ -57,19 +59,32 @@ public:
     {
         if (!empty()) {
             int idx = (_head + 1) % _max_size;
-            _queue[idx].~T();
+            // _queue[idx].~T();
+            // 调用对象的析构函数,可能会释放对象的部分资源,当重新利用该对象时,即对
+            // 该对象重新赋值时,则会出现SEGMENT FAULT
+            // 例如对象是,std::list,调用析构函数时,如果list中包含对象,析构函数会
+            // 调用list的析构函数,释放list中存在的对象,不过list貌似没有把内部指针
+            // 置null,当重新利用该对象时,赋值时会导致先释放原有list中的对象,此时
+            // list内部包含野指针,进程就直接挂了
             _head = idx;
         }
     }
 
-    inline const T & front() const
+    // 有个小小的问题, 队列为空,front返回的对象是无效的,不过现在只有taskqueue在用,事件驱动是没有问题的
+    inline T * front() const
     {
-        return _queue[(_head + 1) % _max_size];
+        if (!empty()) {
+            return &_queue[(_head + 1) % _max_size];
+        }
+        return nullptr;
     }
 
-    inline const T & back() const
+    inline T * back() const
     {
-        return _queue[(_tail - 1 + _max_size) % _max_size];
+        if (!empty()) {
+            return *_queue[(_tail - 1 + _max_size) % _max_size];
+        }
+        return nullptr;
     }
 
     inline bool size() const
