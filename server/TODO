@@ -14,6 +14,12 @@
 
         how to fix??????????????????//
 
+        TaskQueue接口修改为先Front获取内容指针,然后拷贝,在IoHandler中进行拷贝对象,然后Release掉TaskQueue
+        中的对象,然后在Take,将队列中的该对象标记为可用
+             还有一个小问题就是,client socket连接在send发送失败后,send_list中引用该Buf,发送失败后,
+             list中的Rcbuf并没有释放,因此只有当这个FdInfo对象被重新利用,一个空的FdInfo赋值给这个对象的时候,
+             list中的Rcbuf才会被释放
+
 
 发现问题:
     当client只连接,而不发送和接受数据,连接完直接关闭连接.当2个线程同时跑大量的连接,比如2个线程,分别跑
