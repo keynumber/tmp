@@ -96,21 +96,27 @@ void IoHandler::Run()
             switch (fdinfo.type) {
             case kAcceptorToIohandlerQueue:
             {
-                AcceptInfo accinfo;
-                if (unlikely(!_accept_queue.Take(&accinfo))) {
-                    LogWarn("iohandle %d: has notified but no message\n", _handler_id);
+                AcceptInfo *p = _accept_queue.Front();
+                if (unlikely(!p)) {
+                    LogWarn("iohandle %d: was notified but no message\n", _handler_id);
                     continue;
                 }
+                AcceptInfo accinfo = *p;
+                _accept_queue.Take();
                 HandleAcceptClient(accinfo);
                 break;
             }
             case kWorkerRspToIohandlerQueue:
             {
-                ServerRspPack rsp;
-                if (unlikely(!_worker_queue.Take(&rsp))) {
-                    LogWarn("iohandle %d: worker has notified but no response message\n", _handler_id);
+                ServerRspPack *p = _worker_queue.Front();
+                if (unlikely(!p)) {
+                    LogWarn("iohandle %d: worker was notified but no response message\n", _handler_id);
                     continue;
                 }
+
+                ServerRspPack rsp = *p;
+                p->response_buf.Release();
+                _worker_queue.Take();
                 HandleWorkerRsp(rsp);               // 写请求不改变fd最后活跃时间
                 break;
             }

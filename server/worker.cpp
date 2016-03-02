@@ -68,11 +68,15 @@ void Worker::Run()
             _poller.GetEvent(&key, &events);
             assert(key >= 0);
 
-            ClientReqPack req;
-            if (unlikely(!_client_req_queue.Take(&req))) {
-                LogWarn("no message");
+            ClientReqPack *p = _client_req_queue.Front();
+            if (unlikely(!p)) {
+                LogWarn("worker %d: was notified but no message\n", _worker_id);
                 continue;
             }
+
+            ClientReqPack req = *p;
+            p->request_buf.Release();
+            _client_req_queue.Take();
             _client_request_handler(_worker_id, req);
         }
     }
