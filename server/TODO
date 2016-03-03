@@ -20,6 +20,9 @@
              list中的Rcbuf并没有释放,因此只有当这个FdInfo对象被重新利用,一个空的FdInfo赋值给这个对象的时候,
              list中的Rcbuf才会被释放
 
+        自己通过_rcbuf_pool管理socket的收发缓冲,关闭时释放缓冲区,并且避免不停申请Rcbuf对象,也不会有
+        list延迟释放和segment fault错误
+
 
 发现问题:
     当client只连接,而不发送和接受数据,连接完直接关闭连接.当2个线程同时跑大量的连接,比如2个线程,分别跑

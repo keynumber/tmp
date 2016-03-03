@@ -27,6 +27,7 @@ IoHandler::IoHandler()
     , _client_read_buf1(new RcBuf(gGlobalConfigure.iohandler_read_buf_len))
     , _client_read_buf2(new RcBuf(gGlobalConfigure.iohandler_read_buf_len))
     , _poller(gGlobalConfigure.iohandler_max_event_num)
+    , _rcbuf_pool(gGlobalConfigure.iohandler_socket_buf_cnt)
     , _packet_len_func(packet_len_func)
     , _header_len_func(header_len_func)
     , _header_len(_header_len_func())
@@ -54,7 +55,7 @@ bool IoHandler::Initialize(int handler_id)
         return false;
     }
     int accept_queue_fd = _accept_queue.GetNotifier();
-    int accept_queue_idx = _fd_array.Push(FdInfo());
+    int accept_queue_idx = _fd_array.Push();
     _fd_array[accept_queue_idx].fd = accept_queue_fd;
     _fd_array[accept_queue_idx].type = kAcceptorToIohandlerQueue;
     _poller.Add(accept_queue_fd, accept_queue_idx, EPOLLIN);
@@ -65,7 +66,7 @@ bool IoHandler::Initialize(int handler_id)
         return false;
     }
     int worker_queue_fd = _worker_queue.GetNotifier();
-    int worker_queue_idx = _fd_array.Push(FdInfo());
+    int worker_queue_idx = _fd_array.Push();
     _fd_array[worker_queue_idx].fd = worker_queue_fd;
     _fd_array[worker_queue_idx].type = kWorkerRspToIohandlerQueue;
     _poller.Add(worker_queue_fd, worker_queue_idx, EPOLLIN);
@@ -159,7 +160,7 @@ bool IoHandler::HandleAcceptClient(const AcceptInfo & accinfo)
         return false;
     }
 
-    int client_idx= _fd_array.Push(FdInfo());
+    int client_idx= _fd_array.Push();
     _fd_array[client_idx].fd = accinfo.fd;
     _fd_array[client_idx].idx = client_idx;
     _fd_array[client_idx].client_ip = accinfo.addr.sin_addr.s_addr;
@@ -201,16 +202,17 @@ bool IoHandler::HandleClientRequest(int idx)
     RcBuf * & buf2 = _client_read_buf2;
 
     // copy 上次未构成完整包的数据
-    int unfulfiled_len = _fd_array[idx]._to_request.len;
-    if (_fd_array[idx]._to_request.buf) {
-        char * unfulfiled_buf = _fd_array[idx]._to_request.buf + _fd_array[idx]._to_request.offset;
+    RcBuf & to_request_rcbuf = _rcbuf_pool[_fd_array[idx]._to_request_idx];
+    int unfulfiled_len = to_request_rcbuf.len;
+    if (to_request_rcbuf.buf) {
+        char * unfulfiled_buf = to_request_rcbuf.buf + to_request_rcbuf.offset;
         if (unfulfiled_len > buf1->len) {
             DELETE_POINTER(buf1);
             buf1 = buf2;
             buf2 = new RcBuf(gGlobalConfigure.iohandler_read_buf_len);
         }
         memcpy(buf1->buf + buf1->offset, unfulfiled_buf, unfulfiled_len);
-        _fd_array[idx]._to_request.Release();
+        to_request_rcbuf.Release();
     }
 
     DEBUG("iohandler %d: last from client %s:%d fd %d unfulfiled data len %d byts\n",
@@ -322,16 +324,44 @@ bool IoHandler::HandleClientRequest(int idx)
             // buf2中有为处理完的数据
             remain_data_len -= handle_len;
             if (remain_data_len > 0) {
-                fdinfo._to_request.Copy(*buf2, buf2->offset, remain_data_len);
+                int idx = _rcbuf_pool.Push();
+                if (unlikely(idx < 0)) {
+                    LogInfo("iohandler %d: client %s:%d fd %d alloc socket rcbuf failed, close connection",
+                            _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
+                    CloseClientConn(idx);
+                    return false;
+                }
+
+                fdinfo._to_request_idx = idx;
+                _rcbuf_pool[idx].Copy(*buf2, buf2->offset, remain_data_len);
+
                 buf2->offset += remain_data_len;
                 buf2->len -= remain_data_len;
             }
         } else {
             // 如果临时数据中的不能构成一个包,则直接放在fd的缓存buf中就行了
-            fdinfo._to_request = tmpbuf;
+            int idx = _rcbuf_pool.Push();
+            if (unlikely(idx < 0)) {
+                LogInfo("iohandler %d: client %s:%d fd %d alloc socket rcbuf failed, close connection",
+                        _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
+                CloseClientConn(idx);
+                return false;
+            }
+
+            fdinfo._to_request_idx = idx;
+            _rcbuf_pool[idx] = tmpbuf;
         }
     } else if (next_packet_remain_data > 0) {
-        fdinfo._to_request.Copy(*buf1, buf1->offset, next_packet_remain_data);
+        int idx = _rcbuf_pool.Push();
+        if (unlikely(idx < 0)) {
+            LogInfo("iohandler %d: client %s:%d fd %d alloc socket rcbuf failed, close connection",
+                    _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
+            CloseClientConn(idx);
+            return false;
+        }
+
+        fdinfo._to_request_idx = idx;
+        _rcbuf_pool[idx].Copy(*buf1, buf1->offset, next_packet_remain_data);
         buf1->offset += next_packet_remain_data;
         buf1->len -= next_packet_remain_data;
     }
@@ -389,7 +419,8 @@ int IoHandler::HandleClientBuf(int idx, RcBuf *rcbuf, int len)
 
 void IoHandler::CloseClientConn(int idx)
 {
-    int fd = _fd_array[idx].fd;
+    FdInfo & fdinfo = _fd_array[idx];
+    int fd = fdinfo.fd;
     // 必须先从poller中删除fd,才能关闭socket fd,否则,反过来的话,fd先被关闭
     // 则poller删除fd时,会报错bad file descriptor,并且该fd会被poller持续触发,
     // 导致iohandler cpu占用持续100%
@@ -400,34 +431,68 @@ void IoHandler::CloseClientConn(int idx)
     _fd_array.Pop(idx);
     _fd_expire_queue.Erase(idx);
     safe_close(fd);
+
+    // 释放fd关联收发缓冲区的RcBuf
+    int t = fdinfo._to_request_idx;
+    while (t >= 0) {
+        _rcbuf_pool[t].Release();
+        t = _rcbuf_pool.GetNext(t);
+    }
+    _rcbuf_pool.PopList(fdinfo._to_request_idx);
+
+    t = fdinfo._to_send_head;
+    while (t >= 0) {
+        _rcbuf_pool[t].Release();
+        t = _rcbuf_pool.GetNext(t);
+    }
+    _rcbuf_pool.PopList(fdinfo._to_send_head);
+
+    fdinfo._to_request_idx = -1;
+    fdinfo._to_send_head = -1;
+    fdinfo._to_send_tail = -1;
 }
 
 bool IoHandler::HandleWorkerRsp(const ServerRspPack & rsp)
 {
     FdInfo & fdinfo = *rsp.fdinfo;
-    fdinfo._to_send.push_back(rsp.response_buf);
+    int idx = _rcbuf_pool.Push(fdinfo._to_send_tail);       // 添加到末尾
+    if (unlikely(idx < 0)) {
+        LogInfo("iohandler %d: client %s:%d fd %d alloc socket rcbuf failed, close connection",
+                _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
+        CloseClientConn(idx);
+        return false;
+    }
+
+    fdinfo._to_send_tail = idx;
+    if (fdinfo._to_send_head < 0) {
+        fdinfo._to_send_head = idx;
+    }
+
+    _rcbuf_pool[idx] = rsp.response_buf;
     return SendDataToClient(fdinfo);
 }
 
 bool IoHandler::SendDataToClient(FdInfo & fdinfo)
 {
-    const int max_iovec_count = 128;
-    int size = fdinfo._to_send.size();
-    if (unlikely(size > max_iovec_count)) {     // 超过最大长度,认为客户端连接出问题,直接关闭
-        LogErr("iohandler %d: _to_send buf is too large close client fd %d, cient %s:%d\n",
-               _handler_id, fdinfo.fd, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port);
-        CloseClientConn(fdinfo.idx);
-        return false;
-    }
+    const int max_iovec_count = 64;
+    struct iovec towrite[max_iovec_count];
 
     int total_need_send = 0;
     int cnt = 0;
-    struct iovec towrite[max_iovec_count];
-    for (const auto & it : fdinfo._to_send) {
-        towrite[cnt].iov_base = it.buf + it.offset;
-        towrite[cnt].iov_len = it.len;
-        total_need_send += it.len;
+    int t = fdinfo._to_send_head;
+    while (t >= 0 && cnt < max_iovec_count) {
+        towrite[cnt].iov_base = _rcbuf_pool[t].buf + _rcbuf_pool[t].offset;
+        towrite[cnt].iov_len = _rcbuf_pool[t].len;
+        total_need_send += _rcbuf_pool[t].len;
+        t = _rcbuf_pool.GetNext(t);
         ++cnt;
+    }
+
+    if (t >= 0) {
+        LogInfo("iohandler %d: client %s:%d fd %d to send buf is too large, close connection",
+                _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
+        CloseClientConn(fdinfo.idx);
+        return false;
     }
 
     int fd = fdinfo.fd;
@@ -441,22 +506,23 @@ bool IoHandler::SendDataToClient(FdInfo & fdinfo)
     }
 
     int tmp = write_bytes;
-    auto it = fdinfo._to_send.begin();
-    auto next = it;
+    t = fdinfo._to_send_head;
+    int next = t;
     while (tmp > 0) {
-        it = next;
-        // next = ++it;     .... TODO
-        // next = it + 1;
-        if (tmp >= it->len) {
-            tmp -= it->len;
-            // fdinfo._to_send.erase(it);
-            fdinfo._to_send.erase(it++);
+        if (tmp >= _rcbuf_pool[t].len) {
+            tmp -= _rcbuf_pool[t].len;
+            next = _rcbuf_pool.GetNext(next);
+            _rcbuf_pool[t].Release();
+            _rcbuf_pool.Pop(t);
         } else {
-            it->len -= tmp;
-            it->offset += tmp;
+            _rcbuf_pool[t].len -= tmp;
+            _rcbuf_pool[t].offset += tmp;
             break;
         }
+        t = next;
     }
+
+    fdinfo._to_send_head = t;
 
     if (unlikely(write_bytes < total_need_send)) {
         _poller.Add(fd, fdinfo.idx, EPOLLOUT);

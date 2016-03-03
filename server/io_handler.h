@@ -60,6 +60,8 @@ private:
     // worker发送响应数据到iohandler
     TaskQueue<ServerRspPack> _worker_queue;
 
+    FixArray<RcBuf> _rcbuf_pool;
+
     ppacket_len_func _packet_len_func;
     pheader_len_func _header_len_func ;
     const int _header_len;
