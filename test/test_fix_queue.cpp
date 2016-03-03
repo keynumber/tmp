@@ -1,4 +1,5 @@
 #include <iostream>
+#include <list>
 
 #include "common/data_struct/fix_queue.h"
 
@@ -64,5 +65,17 @@ int main(int argc, char *argv[])
 {
     TestPush();
     TestObj();
+
+    ef::FixQueue<std::list<int>> q(5);
+    cout << " list                     ----- push" << endl;
+    std::list<int> l;
+    l.push_back(5);
+
+    q.push(l);
+    cout << " ----- pop" << endl;
+    q.pop();
+    cout << " ----- pop done" << endl;
+    cout << " list                     ----- push" << endl;
+    q.push(std::list<int>());
     return 0;
 }
