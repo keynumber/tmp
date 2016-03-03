@@ -52,9 +52,8 @@ int generator_sendbuf(char *buf, int len)
     ef::PacketHeader * header = (ef::PacketHeader*)buf;
     random_device rd;
     int t = rd() % request_num;
-    strcat(header->payload, content[t]);
+    memcpy(header->payload, content[t], content_len);
 
-    int content_len = strlen(header->payload);
     header->length = content_len;
     header->request_id = rd();
     return sizeof(ef::PacketHeader) + content_len;

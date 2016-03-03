@@ -30,10 +30,10 @@ using namespace std;
 
 const int max_thread_num = 200;
 const unsigned short server_port = 12345;
-const char * server_addr = "127.0.0.1";
+const char * server_addr = "192.168.0.115";
 
 const int request_num = 10;
-const int content_len = 1000;
+const int content_len = 10;
 char _content[request_num][content_len + 1];
 const auto & content = _content;
 
@@ -52,9 +52,8 @@ int generator_sendbuf(char *buf, int len)
     ef::PacketHeader * header = (ef::PacketHeader*)buf;
     random_device rd;
     int t = rd() % request_num;
-    strcat(header->payload, content[t]);
+    memcpy(header->payload, content[t], content_len);
 
-    int content_len = strlen(header->payload);
     header->length = content_len;
     header->request_id = rd();
     return sizeof(ef::PacketHeader) + content_len;
@@ -124,7 +123,7 @@ int short_conn_request_svr()
 
     int conn = socket(AF_INET, SOCK_STREAM, 0);
     if (conn == -1) {
-        perror("socket error\n");
+        perror("socket error: ");
         return -1;
     }
 
