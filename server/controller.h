@@ -63,9 +63,9 @@ private:
     std::vector<Worker *> _workers;
     std::vector<std::thread*> _worker_threads;
 
-    uint32_t _acceptor_id_generator;
-    uint32_t _iohandler_id_generator;
-    uint32_t _worker_id_generator;
+    int _acceptor_id_generator;
+    int _iohandler_id_generator;
+    int _worker_id_generator;
 
     std::string _errmsg;
 };

@@ -55,7 +55,7 @@ bool IoHandler::Initialize(int handler_id)
         return false;
     }
     int accept_queue_fd = _accept_queue.GetNotifier();
-    int accept_queue_idx = _fd_array.Push();
+    uint64_t accept_queue_idx = static_cast<uint64_t>(_fd_array.Push());
     _fd_array[accept_queue_idx].fd = accept_queue_fd;
     _fd_array[accept_queue_idx].type = kAcceptorToIohandlerQueue;
     _poller.Add(accept_queue_fd, accept_queue_idx, EPOLLIN);
@@ -66,7 +66,7 @@ bool IoHandler::Initialize(int handler_id)
         return false;
     }
     int worker_queue_fd = _worker_queue.GetNotifier();
-    int worker_queue_idx = _fd_array.Push();
+    uint64_t worker_queue_idx = static_cast<uint64_t>(_fd_array.Push());
     _fd_array[worker_queue_idx].fd = worker_queue_fd;
     _fd_array[worker_queue_idx].type = kWorkerRspToIohandlerQueue;
     _poller.Add(worker_queue_fd, worker_queue_idx, EPOLLIN);
@@ -86,13 +86,11 @@ void IoHandler::Run()
     while (_run_flag) {
         event_num = _poller.Wait(100);
         if (unlikely(event_num < 0)) {
-            LogErr("iohandler %d: wait error, errmsg: %s",
-                    _handler_id, _poller.GetErrMsg().c_str());
+            LogErr("iohandler %d: wait error, errmsg: %s", _handler_id, _poller.GetErrMsg().c_str());
             continue;
         }
 
-        for (int i=0; i<event_num; ++i) {
-            _poller.GetEvent(&key, &events);
+        while (_poller.GetEvent(&key, &events) == 0) {
             FdInfo & fdinfo = _fd_array[key];
             switch (fdinfo.type) {
             case kAcceptorToIohandlerQueue:
@@ -151,19 +149,20 @@ void IoHandler::Run()
 bool IoHandler::HandleAcceptClient(const AcceptInfo & accinfo)
 {
     LogFrame("iohandler %d: accept client from %s:%d, fd: %d\n", _handler_id,
-            IpToString(accinfo.addr.sin_addr.s_addr).c_str(), ntohs(accinfo.addr.sin_port), accinfo.fd);
+            IpToString(static_cast<int>(accinfo.addr.sin_addr.s_addr)).c_str(),
+            ntohs(accinfo.addr.sin_port), accinfo.fd);
     if (unlikely(set_nonblock(accinfo.fd) < 0)) {
-        LogFrame("iohandler %d: accept client from %s:%d, fd: %d set_nonblock failed\n",
-                 _handler_id, IpToString(accinfo.addr.sin_addr.s_addr).c_str(),
+        LogErr("iohandler %d: accept client from %s:%d, fd: %d set_nonblock failed\n",
+                 _handler_id, IpToString(static_cast<int>(accinfo.addr.sin_addr.s_addr)).c_str(),
                  ntohs(accinfo.addr.sin_port), accinfo.fd);
         safe_close(accinfo.fd);
         return false;
     }
 
-    int client_idx= _fd_array.Push();
+    uint64_t client_idx= static_cast<uint64_t>(_fd_array.Push());
     _fd_array[client_idx].fd = accinfo.fd;
     _fd_array[client_idx].idx = client_idx;
-    _fd_array[client_idx].client_ip = accinfo.addr.sin_addr.s_addr;
+    _fd_array[client_idx].client_ip = static_cast<int>(accinfo.addr.sin_addr.s_addr);
     _fd_array[client_idx].client_port = accinfo.addr.sin_port;
     _fd_array[client_idx].type = kClientFd;
     _fd_array[client_idx].last_access_time = _now;
@@ -211,31 +210,31 @@ bool IoHandler::HandleClientRequest(int idx)
             buf1 = buf2;
             buf2 = new RcBuf(gGlobalConfigure.iohandler_read_buf_len);
         }
-        memcpy(buf1->buf + buf1->offset, unfulfiled_buf, unfulfiled_len);
+        memcpy(buf1->buf + buf1->offset, unfulfiled_buf, static_cast<size_t>(unfulfiled_len));
         to_request_rcbuf.Release();
     }
 
     DEBUG("iohandler %d: last from client %s:%d fd %d unfulfiled data len %d byts\n",
-          _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd, unfulfiled_len);
+          _handler_id, IpToString(static_cast<int>(fdinfo.client_ip)).c_str(), fdinfo.client_port, fdinfo.fd, unfulfiled_len);
 
 
     struct iovec vec[2];
     vec[0].iov_base = buf1->buf + buf1->offset + unfulfiled_len;
-    vec[0].iov_len = buf1->len - unfulfiled_len;
+    vec[0].iov_len = static_cast<size_t>(buf1->len - unfulfiled_len);
     vec[1].iov_base = buf2->buf + buf2->offset;
-    vec[1].iov_len = buf2->len;
+    vec[1].iov_len = static_cast<size_t>(buf2->len);
 
     int len = safe_readv(fdinfo.fd, vec, 2);
     if (unlikely(len < 0)) {
         // TODO port need ntol
         _errmsg = safe_strerror(errno);
-        LogInfo("iohandler %d: read from client %s:%d fd %d error, close connection\n",
-                _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
+        LogErr("iohandler %d: read from client %s:%d fd %d error, close connection, errmsg: %s\n",
+                _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd, _errmsg.c_str());
         CloseClientConn(idx);
         return false;
     } else if (len == 0) {
-        LogInfo("iohandler %d: client %s:%d fd %d close disconnection\n", _handler_id,
-                IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
+        LogFrame("iohandler %d: client %s:%d fd %d close disconnection\n", _handler_id,
+                 IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
         CloseClientConn(idx);
         return true;
     }
@@ -246,8 +245,8 @@ bool IoHandler::HandleClientRequest(int idx)
     int remain_data_len = len + unfulfiled_len;
     int handle_len = HandleClientBuf(idx, buf1, remain_data_len);
     if (unlikely(handle_len < 0)) {
-        LogInfo("iohandler %d: client %s:%d fd %d request data check failed with packet_len_func, close connection",
-                _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
+        LogErr("iohandler %d: client %s:%d fd %d request data check failed with packet_len_func, close connection",
+               _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
         CloseClientConn(idx);
         return false;
     }
@@ -264,14 +263,14 @@ bool IoHandler::HandleClientRequest(int idx)
             p = buf1->buf + buf1->offset;
         } else {
             p = tmpbuf;
-            memcpy(tmpbuf, buf1->buf + buf1->offset, buf1->len);
-            memcpy(tmpbuf+buf1->len, buf2->buf+buf2->offset, _header_len-buf1->len);
+            memcpy(tmpbuf, buf1->buf + buf1->offset, static_cast<size_t>(buf1->len));
+            memcpy(tmpbuf+buf1->len, buf2->buf+buf2->offset, static_cast<size_t>(_header_len-buf1->len));
         }
 
         int ret = _packet_len_func(p, _header_len, &next_packet_theory_len);
         if (unlikely(ret < 0)) {
-            LogInfo("iohandler %d: client %s:%d fd %d request data check failed with packet_len_func, close connection",
-                    _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
+            LogErr("iohandler %d: client %s:%d fd %d request data check failed with packet_len_func, close connection",
+                   _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
             CloseClientConn(idx);
             return false;
         }
@@ -315,7 +314,7 @@ bool IoHandler::HandleClientRequest(int idx)
 
             handle_len = HandleClientBuf(idx, buf2, remain_data_len);
             if (unlikely(handle_len < 0)) {
-                LogInfo("iohandler %d: client %s:%d fd %d request data check failed with packet_len_func, close connection",
+                LogErr("iohandler %d: client %s:%d fd %d request data check failed with packet_len_func, close connection",
                         _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
                 CloseClientConn(idx);
                 return false;
@@ -326,7 +325,7 @@ bool IoHandler::HandleClientRequest(int idx)
             if (remain_data_len > 0) {
                 int idx = _rcbuf_pool.Push();
                 if (unlikely(idx < 0)) {
-                    LogInfo("iohandler %d: client %s:%d fd %d alloc socket rcbuf failed, close connection",
+                    LogErr("iohandler %d: client %s:%d fd %d alloc socket rcbuf failed, close connection",
                             _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
                     CloseClientConn(idx);
                     return false;
@@ -342,8 +341,8 @@ bool IoHandler::HandleClientRequest(int idx)
             // 如果临时数据中的不能构成一个包,则直接放在fd的缓存buf中就行了
             int idx = _rcbuf_pool.Push();
             if (unlikely(idx < 0)) {
-                LogInfo("iohandler %d: client %s:%d fd %d alloc socket rcbuf failed, close connection",
-                        _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
+                LogErr("iohandler %d: client %s:%d fd %d alloc socket rcbuf failed, close connection",
+                       _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
                 CloseClientConn(idx);
                 return false;
             }
@@ -354,8 +353,8 @@ bool IoHandler::HandleClientRequest(int idx)
     } else if (next_packet_remain_data > 0) {
         int idx = _rcbuf_pool.Push();
         if (unlikely(idx < 0)) {
-            LogInfo("iohandler %d: client %s:%d fd %d alloc socket rcbuf failed, close connection",
-                    _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
+            LogErr("iohandler %d: client %s:%d fd %d alloc socket rcbuf failed, close connection",
+                   _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
             CloseClientConn(idx);
             return false;
         }
@@ -417,8 +416,11 @@ int IoHandler::HandleClientBuf(int idx, RcBuf *rcbuf, int len)
     return handle_len;
 }
 
+    static int socket_num = 0;
+
 void IoHandler::CloseClientConn(int idx)
 {
+    ++socket_num;
     FdInfo & fdinfo = _fd_array[idx];
     int fd = fdinfo.fd;
     // 必须先从poller中删除fd,才能关闭socket fd,否则,反过来的话,fd先被关闭
@@ -457,8 +459,8 @@ bool IoHandler::HandleWorkerRsp(const ServerRspPack & rsp)
     FdInfo & fdinfo = *rsp.fdinfo;
     int idx = _rcbuf_pool.Push(fdinfo._to_send_tail);       // 添加到末尾
     if (unlikely(idx < 0)) {
-        LogInfo("iohandler %d: client %s:%d fd %d alloc socket rcbuf failed, close connection",
-                _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
+        LogErr("iohandler %d: client %s:%d fd %d alloc socket rcbuf failed, close connection",
+               _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
         CloseClientConn(idx);
         return false;
     }
@@ -489,8 +491,8 @@ bool IoHandler::SendDataToClient(FdInfo & fdinfo)
     }
 
     if (t >= 0) {
-        LogInfo("iohandler %d: client %s:%d fd %d to send buf is too large, close connection",
-                _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
+        LogErr("iohandler %d: client %s:%d fd %d to send buf is too large, close connection",
+               _handler_id, IpToString(fdinfo.client_ip).c_str(), fdinfo.client_port, fdinfo.fd);
         CloseClientConn(fdinfo.idx);
         return false;
     }
@@ -525,10 +527,13 @@ bool IoHandler::SendDataToClient(FdInfo & fdinfo)
     fdinfo._to_send_head = t;
 
     if (unlikely(write_bytes < total_need_send)) {
-        _poller.Add(fd, fdinfo.idx, EPOLLOUT);
+        _poller.Add(fd, static_cast<uint64_t>(fdinfo.idx), EPOLLOUT);
         DEBUG("iohandler %d: write fd %d cient %s:%d %d bytes, need total write %d bytes,add EPOLLOUT\n",
-               _handler_id, fd, IpToString(fdinfo.client_ip).c_str(), ntohs(fdinfo.client_port),
-                write_bytes, total_need_send);
+               _handler_id, fd, IpToString(static_cast<int>(fdinfo.client_ip)).c_str(),
+               ntohs(fdinfo.client_port),
+               write_bytes, total_need_send);
+    } else {
+        fdinfo._to_send_tail = -1;
     }
     return true;
 }

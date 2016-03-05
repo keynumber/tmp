@@ -38,7 +38,7 @@ bool Worker::Initialize(int id)
         _errmsg = _client_req_queue.GetErrMsg();
         return false;
     }
-    int notify_fd = _client_req_queue.GetNotifier();
+    uint64_t notify_fd = static_cast<uint64_t>(_client_req_queue.GetNotifier());
     _poller.Add(notify_fd, notify_fd, EPOLLIN);
     return true;
 }

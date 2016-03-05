@@ -16,8 +16,8 @@ enum FdType{
 
 struct FdInfo {
     int fd;
-    uint32_t idx;               // 在iohandler进行管理的_fd_array中的下标
-    uint32_t client_ip;
+    int idx;               // 在iohandler进行管理的_fd_array中的下标
+    int client_ip;
     uint16_t client_port;
     uint16_t type;
     timeval last_access_time;

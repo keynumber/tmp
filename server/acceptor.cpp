@@ -107,7 +107,8 @@ bool Acceptor::Initialize(int id)
     }
 
     for (int i=0; i<_listener_len; ++i) {
-        if (_poller->Add(_listener[i].fd, i, EPOLLIN | EPOLLERR | EPOLLHUP) < 0) {       // TODO 只监听EPOLLIN么?其他的事件呢?
+        int ret = _poller->Add(_listener[i].fd, static_cast<uint64_t>(i), EPOLLIN | EPOLLERR | EPOLLHUP);
+        if (ret < 0) {       // TODO 只监听EPOLLIN么?其他的事件呢?
             _errmsg = "error happend when add listen fd to poller, " + _poller->GetErrMsg();
             LogErr("error happend when add listen fd to poller, errmsg: %s\n",
                     _poller->GetErrMsg().c_str());
@@ -131,30 +132,36 @@ void Acceptor::Run()
             continue;
         }
 
-        uint64_t key = -1;
+        uint64_t key = 0;
         uint32_t events = 0;
-        for (int i=0; i<ret; ++i) {
-            _poller->GetEvent(&key, &events);
+        while (_poller->GetEvent(&key, &events) == 0) {
             if (likely(events & EPOLLIN)) {
                 sockaddr_in  addr;
-                socklen_t addr_len = sizeof(sockaddr_in);
-                int fd = accept(_listener[key].fd, (sockaddr*)&addr, &addr_len);
-                if (unlikely(fd < 0)) {
-                    LogErr("accept socket on port %d failed, errmsg: %s\n",
-                            _listener[key].port, safe_strerror(errno).c_str());
-                    continue;
+                for (int i=0; i<gGlobalConfigure.max_accept_client_per_cycle; ++i) {
+                    socklen_t addr_len = sizeof(sockaddr_in);
+                    int fd = accept(_listener[key].fd, (sockaddr*)&addr, &addr_len);
+                    if (unlikely(fd < 0)) {
+                        if (errno == EAGAIN || errno == EWOULDBLOCK) {      // 没有客户端有连接请求
+                            break;
+                        } else {
+                            LogErr("accept socket on port %d failed, errmsg: %s\n",
+                                   _listener[key].port, safe_strerror(errno).c_str());
+                            continue;
+                        }
+                    }
+
+                    LogFrame("accept client from %s:%d, fd: %d\n",
+                             IpToString(static_cast<int>(addr.sin_addr.s_addr)).c_str(),
+                             ntohs(addr.sin_port), fd);
+
+                    AcceptInfo accept_info;
+                    accept_info.fd = fd;
+                    accept_info.addr = addr;
+                    MessageCenter::PostAcceptClient(accept_info);
                 }
-
-                LogFrame("accept client from %s:%d, fd: %d\n",
-                        IpToString(addr.sin_addr.s_addr).c_str(), ntohs(addr.sin_port), fd);
-
-                AcceptInfo accept_info;
-                accept_info.fd = fd;
-                accept_info.addr = addr;
-                MessageCenter::PostAcceptClient(accept_info);
             } else {
                 LogErr("listen socket on port %d get event not EPOLLIN, but %d\n",
-                        _listener[key].port, events);
+                       _listener[key].port, events);
             }
         }
     }

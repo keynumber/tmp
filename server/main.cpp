@@ -4,7 +4,7 @@
 #include "common/logger.h"
 #include "request_handler.h"
 
-int main(int argc, char *argv[])
+int main()
 {
     ef::Controller controller;
     if (!controller.InitServer()) {
