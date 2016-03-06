@@ -21,6 +21,7 @@ public:
         , _capacity(capacity)
         , _free_list(new int[capacity])
         , _free_head(0)
+        , _free_tail(capacity-1)
     {
         assert(_array);
         assert(_free_list);
@@ -32,12 +33,8 @@ public:
 
     virtual ~FixArray()
     {
-        // DELETE_ARRAY(_array);
-        // DELETE_ARRAY(_free_list);
-        delete [] _array;
-        _array = nullptr;
-        delete [] _free_list;
-        _free_list = nullptr;
+        DELETE_ARRAY(_array);
+        DELETE_ARRAY(_free_list);
     }
 
     /**
@@ -81,12 +78,22 @@ public:
         // list内部包含野指针,进程就直接挂了
         int tail = idx;
         int n = 1;
-        while (_free_list[tail] != -1) {
+        while (_free_list[tail] > 0) {
             tail = _free_list[tail];
             ++n;
         }
-        _free_list[tail] = _free_head;
-        _free_head = idx;
+
+        // 释放的对象放在空闲链的末尾
+        // 因为,FixArray用来放FdInfo,可能出现请求发送到worker后,继续处理client的发送数据时出错,
+        // 导致关闭fd,然后另外的连接使用了这个对象,导致数据错发,因此优先使用长时间未使用的对象
+        // 因此,由于使用场景的问题,释放的对象放在空闲链的末尾,从而优先利用长时间为用过的对象
+        if (_free_head < 0) {
+            _free_head = idx;
+            _free_tail = tail;
+        } else {
+            _free_list[_free_tail] = idx;
+            _free_tail = tail;
+        }
         _size -= n;
         return 0;
     }
@@ -96,8 +103,13 @@ public:
             return 0;
         }
 
-        _free_list[idx] = _free_head;
-        _free_head = idx;
+        if (_free_head < 0) {
+            _free_head = idx;
+            _free_tail = idx;
+        } else {
+            _free_list[_free_tail] = idx;
+            _free_tail = idx;
+        }
         --_size;
         return 0;
     }
@@ -116,6 +128,7 @@ private:
     int _capacity;
     int *_free_list;
     int _free_head;
+    int _free_tail;
 };
 
 } /* namespace ef */
