@@ -33,7 +33,7 @@ const unsigned short server_port = 12345;
 const char * server_addr = "127.0.0.1";
 
 const int request_num = 10;
-const int content_len = 4000;
+const int content_len = 40;
 char _content[request_num][content_len + 1];
 const auto & content = _content;
 
@@ -81,10 +81,9 @@ int read_from_server(int clientfd, char *buf, int len)
 {
     memset(buf, 0, len);
 
-    int packet_len = 0;
     int total_read = 0;
     while(true) {
-        int ret = read(clientfd, buf + total_read, len);
+        int ret = read(clientfd, buf+total_read, len-total_read);
         if (ret < 0) {
             perror("read from server failed, errmsg: ");
             return -1;
@@ -95,11 +94,11 @@ int read_from_server(int clientfd, char *buf, int len)
         }
 
         total_read += ret;
-        ret = ef::packet_len_func(buf, total_read, &packet_len);
+        ret = ef::packet_len_func(buf, total_read);
         if (ret < 0) {
             DEBUG("packet_len_func error\n");
             break;
-        } else if (ret > 0){
+        } else if (ret >= total_read){
             return ret;
         }
     }
@@ -133,6 +132,7 @@ int long_conn_request_svr(int conn)
     if (write_to_server(conn, sendbuf, len) < 0) {
         return -1;
     }
+
     if (read_from_server(conn, recvbuf, buflen) < 0) {
         return -1;
     }
