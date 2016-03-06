@@ -7,7 +7,6 @@
 #define __COMMON_DATA_STRUCT_FIX_QUEUE_H_H___
 
 #include <assert.h>
-#include <stdint.h>
 
 #include "common/macro.h"
 
@@ -25,7 +24,7 @@ namespace ef {
 template<class T>
 class FixQueue {
 public:
-    FixQueue(uint32_t size)
+    FixQueue(int size)
     {
         _max_size = size + 2;
         _queue = new T[_max_size];
@@ -104,9 +103,9 @@ public:
 
 private:
     T * _queue;
-    uint32_t _max_size;
-    uint32_t _head;
-    uint32_t _tail;
+    int _max_size;
+    int _head;
+    int _tail;
 };
 
 } /* namespace ef */

@@ -18,8 +18,8 @@ ExpireQueue::ExpireQueue(int capacity)
 {
     assert(_queue_pre);
     assert(_queue_next);
-    memset(_queue_pre, ~0, sizeof(int)*(_capacity+1));
-    memset(_queue_next, ~0, sizeof(int)*(_capacity+1));
+    memset(_queue_pre, ~0, static_cast<size_t>(sizeof(int)*(_capacity+1)));
+    memset(_queue_next, ~0, static_cast<size_t>(sizeof(int)*(_capacity+1)));
 }
 
 ExpireQueue::~ExpireQueue()
