@@ -33,7 +33,7 @@ const unsigned short server_port = 12345;
 const char * server_addr = "127.0.0.1";
 
 const int request_num = 10;
-const int content_len = 1000;
+const int content_len = 4000;
 char _content[request_num][content_len + 1];
 const auto & content = _content;
 
@@ -89,6 +89,11 @@ int read_from_server(int clientfd, char *buf, int len)
             perror("read from server failed, errmsg: ");
             return -1;
         }
+        if (ret == 0) {
+            perror("server close connetion");
+            return -1;
+        }
+
         total_read += ret;
         ret = ef::packet_len_func(buf, total_read, &packet_len);
         if (ret < 0) {

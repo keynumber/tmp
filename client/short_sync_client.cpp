@@ -89,6 +89,11 @@ int read_from_server(int clientfd, char *buf, int len)
             perror("read from server failed, errmsg: ");
             return -1;
         }
+        if (ret == 0) {
+            perror("server close connetion");
+            return -1;
+        }
+
         total_read += ret;
         ret = ef::packet_len_func(buf, total_read, &packet_len);
         if (ret < 0) {
