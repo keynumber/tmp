@@ -79,10 +79,12 @@ public:
     }
 
     void Release() {
+        offset = 0;
+        len = 0;
+
         if (!_is_released) {
             // 防止release后，析构函数再次release
             _is_released = true;
-
             int count = __sync_sub_and_fetch(_counter, 1);
             RCDEBUG("release with len %d, offset %d, counter: %d\n", len, offset,  *_counter);
             // 此处不能使用使用*_count去做判断，因为重新获取*_count的值，其他的线程可能已经将这个值
@@ -95,8 +97,6 @@ public:
             } else {
                 _counter = nullptr;
                 buf = nullptr;
-                offset = 0;
-                len = 0;
             }
         }
     }
