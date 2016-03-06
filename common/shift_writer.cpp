@@ -58,7 +58,7 @@ bool ShiftWriter::Initialize(const char * path,
 
 int ShiftWriter::Write(void* buf, int len)
 {
-    int ret = safe_write(_fd, buf, len);
+    int ret = safe_write(_fd, buf, static_cast<size_t>(len));
     if (ret < 0) {
         _errmsg = safe_strerror(errno);
     }

@@ -6,7 +6,6 @@
 #ifndef __COMMON_RC_BUF_H_H___
 #define __COMMON_RC_BUF_H_H___
 
-#include <stdint.h>
 #include <assert.h>
 
 #include "macro.h"
@@ -35,7 +34,7 @@ public:
         : buf(new char[buflen])
         , offset(0)
         , len(buflen)
-        , _counter(new uint32_t(0))
+        , _counter(new int(0))
         , _is_released(false)
     {
         assert(buf);
@@ -125,7 +124,7 @@ public:
     int len;           // 内容的长度
 
 private:
-    uint32_t * _counter;
+    int * _counter;
     bool _is_released;
 };
 
