@@ -50,7 +50,7 @@ public:
     inline int GetTail() const { return _tail; }
     inline int GetNext(int idx) const { return _pool->GetNext(idx); }
     inline int Size() const { return _size; }
-    inline T operator[](int idx) { return (*_pool)[idx]; }
+    inline T & operator[](int idx) { return (*_pool)[idx]; }
 
 private:
     int _head = -1;
