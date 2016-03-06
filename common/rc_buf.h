@@ -10,7 +10,7 @@
 
 #include "macro.h"
 
-// #define __RC_DEBUG__
+#define __RC_DEBUG__
 #ifdef __RC_DEBUG__
 #include <stdio.h>
 #define RCDEBUG(fmt, ...) printf(fmt, ##__VA_ARGS__)
@@ -79,9 +79,6 @@ public:
     }
 
     void Release() {
-        offset = 0;
-        len = 0;
-
         if (!_is_released) {
             // 防止release后，析构函数再次release
             _is_released = true;
@@ -99,6 +96,9 @@ public:
                 buf = nullptr;
             }
         }
+
+        offset = 0;
+        len = 0;
     }
 
     void Copy(const RcBuf & rcbuf, int o, int l)
