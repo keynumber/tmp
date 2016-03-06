@@ -29,6 +29,8 @@ add_executable(test_rc_buf test_rc_buf.cpp)
 add_executable(test_performace   test_performance.cpp
                                  ../common/performance_test.cpp)
 
+add_executable(test_pool_list test_pool_list.cpp)
+
 # 输出编译过程详细信息
 set(CMAKE_VERBOSE_MAKEFILE on)
 
