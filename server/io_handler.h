@@ -31,18 +31,23 @@ public:
     void Stop();
     void TimeTick();
     const std::string & GetErrMsg() const;
-    // inline const FdInfo & GetFdInfo(int idx) const { return _fd_array[idx]; }
 
 private:
     bool HandleAcceptClient(const AcceptInfo & accinfo);
     bool HandleClientRequest(int idx);
     bool HandleWorkerRsp(const ServerRspPack & rsp);
-    bool SendDataToClient(FdInfo & fdinfo);
+    bool SendDataToClient(FdInfo & fdinfo, bool is_epoll_out);
     // < 0 出错
     // > 0 返回处理数据的长度
     int HandleClientBuf(int idx, RcBuf *rcbuf, int len);
 
     void CloseClientConn(int idx);
+
+    /**
+     * desc: 将上次收到的但是不构成一个完整请求的数据拷贝到buf1中,如果buf1空间不够,则释放掉buf1,
+     * return: 拷贝到buf1的内存的大小
+     */
+    int CopyUncompleteDataToBuf1(FdInfo & fdinfo);
 
 private:
     int _handler_id;

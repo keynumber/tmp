@@ -26,11 +26,11 @@ struct GlobalConfigure {
     int max_accept_client_per_cycle = 1024;
 
     int iohandler_max_event_num = 1024;        // max poller event
-    int iohandler_accept_queue_size = 20480;    // io handler accept queue size
+    int iohandler_accept_queue_size = 20480;   // io handler accept queue size
     int iohandler_fd_array_size = 20480;       // io handler fd array size
-    int iohandler_read_buf_len = 1024*1024*4;       // buffer的长度至少为请求包的最大数据长度,否则设计的临时buffer不能缓存所有的数据,就会出错
+    int iohandler_read_buf_len = 4*1024*1024;  // buffer的长度至少为请求包的最大数据长度,否则设计的临时buffer不能缓存所有的数据,就会出错
     int iohandler_worker_rsp_queue_size = 10240;
-    int iohandler_socket_buf_cnt = 1000;    // 没有实际的占用内存,只是socket最多有多少各buf
+    int iohandler_socket_buf_pool_size = 20480;    // 没有实际的占用内存,只是socket最多有多少各buf
 
     int worker_max_event_num = 1024;         // max poller event
     int worker_request_queue_size = 20480;    // io handler accept queue size

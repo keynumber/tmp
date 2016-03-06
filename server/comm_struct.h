@@ -4,6 +4,7 @@
 #include <netinet/in.h>     // for sockaddr_in
 
 #include "common/rc_buf.h"
+#include "../common/data_struct/pool_list.h"
 
 namespace ef
 {
@@ -21,9 +22,9 @@ struct FdInfo {
     uint16_t client_port;
     uint16_t type;
     timeval last_access_time;
-    int _to_request_idx = -1;         // 未满一个数据包,数据临时保存,真正存储数据的地方是Iohandler::_client_read_buf1/2中
-    int _to_send_head = -1;           // 可能多个响应都没发出去,全积压在iohandler,但是收包最多只会存一个不完整的包
-    int _to_send_tail = -1;
+
+    PoolList<RcBuf> _to_request;
+    PoolList<RcBuf> _to_send;
 };
 
 struct AcceptInfo {
